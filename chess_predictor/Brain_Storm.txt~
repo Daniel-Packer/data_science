@@ -32,6 +32,4 @@ More components:
 Pretty advanced stuff had a pretty poor prediction rate, but was also being
 run on slower games. With faster games, we might be able to get better
 heterogenity.
-
-Look at autoencoders?
     
