@@ -107,8 +107,8 @@ def get_gameDict(gamepgn):
 		#gameDict["board_states_FEN"].append(current_board.fen())
 
 		#writes the to and from squares
-		move_dict["to"] = chess.SQUARE_NAMES[current_move.to_square]
-		move_dict["from"] = chess.SQUARE_NAMES[current_move.from_square]		
+		move_dict["to"] = [(current_move.to_square % 8) +1, (current_move.to_square // 8) +1 ]
+		move_dict["from"] = [(current_move.from_square % 8) +1, (current_move.from_square // 8) +1 ]
 		#checks if there was en passant
 		if current_board.is_en_passant(current_move):
 			move_dict["special"] = "p"
@@ -155,3 +155,4 @@ def get_gameDict(gamepgn):
 
 	return gameDict
 
+dict = get_gameDict(pgn_test)
