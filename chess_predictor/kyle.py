@@ -45,6 +45,9 @@ pgn_test = '''forest_clf = RandomForestClassifier(max_depth = 5)[Event "Rated Bl
 ### 'check' : returns a string corresponding to whether or not there is a check or checkmate check = "+",
 ###				checkmate  = '#', neither is given by empty string
 
+### board_state 
+### 8x8 array of strings. board_state[rank][column] gives piece, coded as in FEN
+
 def get_gameDict(gamepgn):
 	#creates the game dictionary
 	gameDict = {'white_moves' : [], 'black_moves' :[], 'board_states' :[], 'board_states_FEN' :[] }
@@ -57,7 +60,7 @@ def get_gameDict(gamepgn):
 	#reads in black_player
 	name_start = gamepgn.find('Black "') +7
 	name_end = gamepgn.find('"', name_start)
-	gameDict["black"] = gamepgn[name_start :name_end]
+	gameDict["black_player"] = gamepgn[name_start :name_end]
 
 	#reads in opening
 	name_start = gamepgn.find('ECO') + 5
@@ -100,11 +103,6 @@ def get_gameDict(gamepgn):
 
 		#parses the next move
 		current_move = current_board.parse_san(move)
-		
-
-		####MUST MVE DOWN
-		#writes the new FEN
-		#gameDict["board_states_FEN"].append(current_board.fen())
 
 		#writes the to and from squares
 		move_dict["to"] = [(current_move.to_square % 8) +1, (current_move.to_square // 8) +1 ]
@@ -144,7 +142,7 @@ def get_gameDict(gamepgn):
 		for rank in range(0,8):
 			for column in range(0,8):
 				piece = board_copy.remove_piece_at(chess.SQUARES[8*rank + column ])
-				if piece: board_state[rank][column] = piece.symbol().upper()
+				if piece: board_state[rank][column] = piece.symbol()
 	
 		#check is mate or checkmate
 		if current_board.is_check(): move_dict["check"] = "+"
