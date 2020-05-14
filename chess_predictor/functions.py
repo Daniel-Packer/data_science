@@ -271,6 +271,29 @@ def two_minor_pieces_turns(game_dict):
     return white_board_index, black_board_index, white_turn_index, black_turn_index
 
 
+### INPUT: is_guarded reads in a tuple of integers [file, rank] corresponding to position in question and the FEN of the current board state
+### OUTPUT: returns a list of tuples corresponding to the squares of the pieces guarding the piece
+
+def is_guarded(p_sq, board_state_FEN):
+	# converts FEN to only the board part of the FEN
+	fen = board_state_FEN.split()[0]
+
+	#creates a baseboard object in python chess
+	board = chess.BaseBoard(fen)
+
+	#converts the piece_square tuple to a chess.SQUARE
+	sq = chess.square(p_sq[0],p_sq[1])
+
+	#creates a list for the pieces to return
+	guarding_pieces = []
+
+	#iterates through list of white pieces guarding and stores them in the list
+	for guarder_square in board.attackers(chess.WHITE, sq):
+		guarding_pieces.append([chess.square_file(guarder_square), chess.square_rank(guarder_square)])	
+
+	return guarding_pieces
+
+
         
 ########################################
 ### Features
