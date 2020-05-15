@@ -370,6 +370,7 @@ def discovered_checks(gameDict):
 		if move_square in attackers: attackers.remove(move_square)
 		if len(attackers) > 0:
 			discovered_checks_given  += 1
+			print("d check give: ", i)
 
 	#goes through to see list of where a discovered check could be given
 	for i in range(1, len(gameDict['white_moves'])):
@@ -390,6 +391,7 @@ def discovered_checks(gameDict):
 				if move_square in attackers: attackers.remove(move_square)
 				if len(attackers) > 0:
 					check_chance_flag  = 1
+		if check_chance_flag: print("d check chance: ", i)
 		discovered_checks_chances += check_chance_flag
 
 	# check where a discovered check is set up. We define this to be move where, if black
@@ -421,6 +423,7 @@ def discovered_checks(gameDict):
 						attackers.remove(move_square)
 					if len(attackers) > 0:
 						check_chance_flag  = 1
+			if check_chance_flag: print("d check set ", i)
 			discovered_checks_set_up += check_chance_flag
 
 	return {'discovered_checks_set_up' : discovered_checks_set_up, 'discovered_checks_given' :discovered_checks_given, 'discovered_checks_chances' :discovered_checks_chances}
