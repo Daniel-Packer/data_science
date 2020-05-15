@@ -1,6 +1,6 @@
 import chess
 
-pgn_test = '''forest_clf = RandomForestClassifier(max_depth = 5)[Event "Rated Blitz game"]
+pgn_test = '''[Event "Rated Blitz game"]
 [Site "https://lichess.org/5WDTKQIn"]
 [Date "2020.05.07"]
 [Round "-"]
@@ -32,6 +32,8 @@ pgn_test = '''forest_clf = RandomForestClassifier(max_depth = 5)[Event "Rated Bl
 ###									(in seconds)
 ### 'board_state' : list of board states 2d array of strings (documentation below)
 ### 'board_state_FEN' : list of FEN strings for the game states
+### 'board_state_pieces' : dictionary of 'white_pieces' and 'black_pieces'
+### 	each is a dictionary of 'P', 'N', 'B', 'R', 'Q', 'K' that contains a list of tuples of piece position
 
 ### move dictionary
 ### the move dictionary has the following keys
@@ -46,11 +48,11 @@ pgn_test = '''forest_clf = RandomForestClassifier(max_depth = 5)[Event "Rated Bl
 ###				checkmate  = '#', neither is given by empty string
 
 ### board_state 
-### 8x8 array of strings. board_state[rank][column] gives piece, coded as in FEN
+### 8x8 array of strings. board_state[rank][file] gives piece, coded as in FEN
 
 def get_gameDict(gamepgn):
 	#creates the game dictionary
-	gameDict = {'white_moves' : [], 'black_moves' :[], 'board_states' :[], 'board_states_FEN' :[] }
+	gameDict = {'white_moves' : [], 'black_moves' :[], 'board_states' :[], 'board_states_FEN' :[], 'board_state_pieces' : {'white_pieces' :{'P': [], 'N' : [], 'B': [], 'R':[], 'Q':[], 'K':[]}, 'black_pieces' :{'P': [], 'N' : [], 'B': [], 'R':[], 'Q':[], 'K':[]}}}
 	
 	#reads in white_player
 	name_start = gamepgn.find('White "') +7
@@ -136,13 +138,15 @@ def get_gameDict(gamepgn):
 		current_board.push(current_move)
 		gameDict["board_states_FEN"].append(current_board.fen())
 
-		#writes the array state
+		#writes the array state and piece state
 		board_copy = current_board.copy()
 		board_state =  [[None for i in range(0,8)] for j in range(0,8)]
 		for rank in range(0,8):
 			for column in range(0,8):
 				piece = board_copy.remove_piece_at(chess.SQUARES[8*rank + column ])
-				if piece: board_state[rank][column] = piece.symbol()
+				if piece: 
+					board_state[rank][column] = piece.symbol()
+					
 	
 		#check is mate or checkmate
 		if current_board.is_check(): move_dict["check"] = "+"
@@ -153,4 +157,27 @@ def get_gameDict(gamepgn):
 
 	return gameDict
 
-dict = get_gameDict(pgn_test)
+### INPUT: is_guarded reads in a tuple of integers [file, rank] corresponding to position in question and the FEN of the current board state
+### OUTPUT: returns a list of tuples corresponding to the squares of the pieces guarding the piece
+
+def is_guarded(p_sq, board_state_FEN):
+	# converts FEN to only the board part of the FEN
+	fen = board_state_FEN.split()[0]
+
+	#creates a baseboard object in python chess
+	board = chess.BaseBoard(fen)
+
+	#converts the piece_square tuple to a chess.SQUARE
+	sq = chess.square(p_sq[0],p_sq[1])
+
+	#creates a list for the pieces to return
+	guarding_pieces = []
+
+	#iterates through list of white pieces guarding and stores them in the list
+	for guarder_square in board.attackers(chess.WHITE, sq):
+		guarding_pieces.append([chess.square_file(guarder_square), chess.square_rank(guarder_square)])	
+
+	return guarding_pieces
+
+
+print(is_guarded([4,1], chess.STARTING_FEN))
