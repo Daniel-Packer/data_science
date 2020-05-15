@@ -177,8 +177,8 @@ def get_gameDict(gamepgn):
 
 		#checks if midgame 
 		#counts numbers of minor/major pieces
-		major_minor_piece_count = len(gameDict['white_pieces'][move_counter]['N']) +len(gameDict['white_pieces'][move_counter]['B'])+len(gameDict['white_pieces'][move_counter]['R'])+len(gameDict['white_pieces'][move_counter]['Q']) +len(gameDict['black_pieces'][move_counter]['N'])+ len(gameDict['black_pieces'][move_counter]['R']) +len(gameDict['black_pieces'][move_counter]['Q'])         
-		if gameDict['middle_game_index'] == None :
+		major_minor_piece_count = len(gameDict['white_pieces'][move_counter]['N']) +len(gameDict['white_pieces'][move_counter]['B'])+len(gameDict['white_pieces'][move_counter]['R'])+len(gameDict['white_pieces'][move_counter]['Q']) +len(gameDict['black_pieces'][move_counter]['N'])+ len(gameDict['black_pieces'][move_counter]['R']) + len(gameDict['black_pieces'][move_counter]['B']) + len(gameDict['black_pieces'][move_counter]['Q'])
+		if not gameDict['middle_game_index']:
 			#gets the number of pieces on the back ranks
 			back_rank_pieces_white = 0
 			back_rank_pieces_black = 0
@@ -195,7 +195,7 @@ def get_gameDict(gamepgn):
 				gameDict['middle_game_index'] = move_counter
 		
 		#checks if endgame
-		if gameDict['end_game_index'] == None and major_minor_piece_count <= 6:
+		if not (gameDict['end_game_index'])  and major_minor_piece_count <= 6:
 			gameDict['end_game_index'] = move_counter
         
 		#check is mate or checkmate
