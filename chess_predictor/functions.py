@@ -368,11 +368,11 @@ def white_development(game_dict):
     return output
 
 
-Time to castle
-Castle side
-Castle side relative to opponent
-Artificial castling
-Early development on castling side
+#Time to castle
+#Castle side
+#Castle side relative to opponent
+#Artificial castling
+#Early development on castling side
 
 ## Outputs a list [time, side, side_relative, artificial, development] where
 ## time : float in [0,1], 1/(the turn they castled), 0 if no castle
@@ -401,7 +401,8 @@ def white_castling(game_dict):
             
     # Cases on whether they castled
     if castled:
-        # FIXME
+        output = [0,0,0,0,0]
+	# FIXME
     else:
         output = [0, 0, 0, 0, 0]
 
@@ -500,4 +501,21 @@ def discovered_checks(gameDict):
 			discovered_checks_set_up += check_chance_flag
 
 	return {'discovered_checks_set_up' : discovered_checks_set_up, 'discovered_checks_given' :discovered_checks_given, 'discovered_checks_chances' :discovered_checks_chances}
+
+
+### distribution_piece_moves function
+###
+### Input: gameDict
+### Output: dictionary with keys 'P', 'N', 'B', 'R', 'Q', 'K' with values of percentage of time that type of piece was moved
+
+def distribution_piece_moves(gameDict):
+	dict = {'P':0, 'N':0, 'B':0, 'R':0, 'Q':0, 'K':0}
+
+	for i in range(0, len(gameDict['white_moves'])):
+		piece = gameDict['white_moves'][i]['piece']
+		if piece == 'O':
+			dict['K'] +=1/len(gameDict['white_moves'])
+			dict['R'] +=1/len(gameDict['white_moves'])
+		else: dict[piece] +=1/len(gameDict['white_moves'])
+	return dict
 
