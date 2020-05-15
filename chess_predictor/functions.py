@@ -600,3 +600,20 @@ def discovered_checks(gameDict):
 
 	return {'discovered_checks_set_up' : discovered_checks_set_up, 'discovered_checks_given' :discovered_checks_given, 'discovered_checks_chances' :discovered_checks_chances}
 
+
+### distribution_piece_moves function
+###
+### Input: gameDict
+### Output: dictionary with keys 'P', 'N', 'B', 'R', 'Q', 'K' with values of percentage of time that type of piece was moved
+
+def distribution_piece_moves(gameDict):
+	dict = {'P':0, 'N':0, 'B':0, 'R':0, 'Q':0, 'K':0}
+
+	for i in range(0, len(gameDict['white_moves'])):
+		piece = gameDict['white_moves'][i]['piece']
+		if piece == 'O':
+			dict['K'] +=1/len(gameDict['white_moves'])
+			dict['R'] +=1/len(gameDict['white_moves'])
+		else: dict[piece] +=1/len(gameDict['white_moves'])
+	return dict
+
