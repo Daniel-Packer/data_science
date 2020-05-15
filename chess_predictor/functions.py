@@ -363,32 +363,80 @@ def white_development(game_dict):
         piece_dict = game_dict['white_pieces'][index]
         piece_locations_array = list(piece_dict.values())
         piece_x_locations = [coord[0] for sublist in piece_locations_array for coord in sublist]
-        output[-1] = (np.mean(piece_x_locations) - 4.5) / 3.5
+        output[-1] = (np.mean(piece_x_locations) - 3.5) / 3.5
     
     return output
 
-<<<<<<< HEAD
-
-#Time to castle
-#Castle side
-#Castle side relative to opponent
-#Artificial castling
-#Early development on castling side
-
-=======
->>>>>>> 5f6d199b776bf800049248e56d48afc08930658b
-## Outputs a list [time, side, side_relative, artificial, development] where
-## time : float in [0,1], 1/(the turn they castled), 0 if no castle
+## Outputs a list [earliness, side, side_relative, artificial, development] where
+## earliness : float in [0,1], 1/(the turn they castled), 0 if no castle
 ## side : +1 for king side, -1 for queen side, 0 for no castle
 ## side_relative : +1 for same side as opponent, -1 for opposite side, 0 if one of them didn't castle
 ## artificial : 0 if bonafide castle, 1 if artificial
-## development : float in [0,1] for how full the back rank opposite their castling side is
-##               calculated as (# pieces there) / 4, 0 if no castling
+## development : float in [0,1] for how empty the back rank opposite their castling side is
+##               calculated as 1 - (# pieces there) / 3, 0 if no castling
+## So if white castles and they developed their queen side N and B but the R is still there, then development = 0.66
+
 def white_castling(game_dict):
     
-    # Find out if they castled, which side, and which turn
+    # Call helper function to check who castled, which side, and when
+    index_white, side_white, artificial_white = castle_index(game_dict,True)
+    index_black, side_black, artificial_black = castle_index(game_dict,False)
+    
+    # Set the earliness
+    if index_white:
+        earliness = 1 / index_white
+    else:
+        earliness = 0
+        
+    # Set the relative side
+    side_relative = side_white * side_black
+    
+    # Set the development
+    if side_white == 0: # No castle
+        development = 0
+    elif side_white == 1: # King side castle, count number of pieces in a1,b1,c1
+        piece_count = 0
+        print('counting')
+        # For x indices 0, 1, 2
+        for i in range(3):
+            # Check if there is a piece in square (i,0) at the time of the castle
+            if game_dict['board_states'][index_white][i][0]:
+                piece_count = piece_count + 1
+        development = 1- piece_count / 3
+    else: # Queen side castle, count number of pieces in f1,g1,h1
+        piece_count = 0
+        # For x indices 5, 6, 7
+        for i in range(5,8):
+            # Check if there is a piece in square (i,0) at the time of the castle
+            if game_dict['board_states'][index_white][i][0]:
+                piece_count = piece_count + 1
+        development = 1 - piece_count / 3
+        
+    return (earliness, side_white, side_relative, artificial_white, development)
+
+## Helper function to find castles
+## Pass it the game_dict and a boolean for which player to check: True = white, False = black
+##
+## Returns (index, side, artificial):
+## index : index of the board position of castling, None if no castle
+## side : +1 for king side, -1 for queen side, 0 for neither
+## artificial : 1 if the castle was artificial, 0 otherwise
+##
+## An artificial castle will be:
+## - Any time through the mid game
+## - King not on the d/e files
+## - King on the back rank
+## - King to the left/right of all its rooks
+##
+def castle_index(game_dict,player):
+    
+    # Find out if they did a real castle, which side, and which turn
     castled = False
-    for move in game_dict['white_moves']:
+    if player:
+        key = 'white_moves'
+    else:
+        key = 'black_moves'
+    for move in game_dict[key]:
         if move['special'] == 'O-O':
             # King side
             castled = True
@@ -400,13 +448,61 @@ def white_castling(game_dict):
             side = -1
             index = move['move_number']
         if castled:
-            break
+            return index, side, 0
+    
+    # If we got here, we didn't do a real castle. So, check for artificial castling:            
+    # We'll look for artificial castling up to the end game, or the whole game if we never reach the end game
+    # Get the locations of their pieces the turns they move
+    if game_dict['end_game_index']:
+        # If we got to the end game
+        max_index = game_dict['end_game_index']
+        if player:
+            pieces = game_dict['white_pieces'][:max_index:2]
+        else:
+            pieces = game_dict['black_pieces'][1:max_index:2]
+    else:
+        # If we didn't get to the end game
+        if player:
+            pieces = game_dict['white_pieces'][::2]
+        else:
+            pieces = game_dict['black_pieces'][1::2]
+
+    # Specifically, the king and rooks
+    king_positions = [move['K'] for move in pieces]
+    rook_positions = [move['R'] for move in pieces]
+
+    # Loop over these positions to find the index of the castle
+    index = None
+    for i in range(len(king_positions)):
+        king_pos = king_positions[i][0]
+
+        # If we're still on the d/e files, keep searching
+        if (king_pos[0] == 4) | (king_pos[0] == 3): continue
             
-    # Cases on whether they castled
-    #if castled:
-        # FIXME
-    #else:
-    #    output = [0, 0, 0, 0, 0]
+        # If we're not on our starting rank, keep searching
+        if player & (king_pos[1] != 0): continue
+        elif (not player) & (king_pos[1] != 7): continue
+
+        # Check if I am to the right or left of all my rooks:
+        # Right (for each rook, check if we're to the right of its x index; then see if this is true for all rooks)
+        if all([(rook_pos[0] < king_pos[0]) for rook_pos in rook_positions[i]]):
+            index = i
+            side = 1 # King side castle
+            break
+        # Left
+        elif all([(rook_pos[0] > king_pos[0]) for rook_pos in rook_positions[i]]):
+            index = i
+            side = -1 # Queen side castle
+            break
+    # Note that when we set index = i this indexes white/black's moves, not the board positions
+    
+    # If we artificial castled, return that
+    if index:
+        index = game_dict[key][i]['move_number']
+        return index, side, 1
+    # Otherwise, no castle of any sort
+    else:
+        return None, 0, 0      
 
 ### discovered_checks function
 ### INPUT: takes in a game dict
