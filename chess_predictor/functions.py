@@ -332,6 +332,79 @@ def is_guarded(p_sq, board_state_FEN):
 ### Features
 ########################################
 
+
+## Outputs a list [A,B,C,D,A#,B#,C#,D#,E#,side] where
+## A,B,C,D : one-hots for ECO codes (omit E)
+## A#,B#,C#,D#,E# : interaction terms, the one-hot times the number of the opening
+## side : Float in [-1,1] i.e. Queen to King for white's preferred development side
+##       Measures this by finding the center of mass at the start of the midgame, or 0 if midgame is not reached
+def white_development(game_dict):
+    # I'll include a one-hot for E at first, remove it later
+    output = np.zeros(11)
+    
+    # Opening info from the dict
+    letter = game_dict['opening'][0]
+    number = int(game_dict['opening'][1:])
+    
+    # Set one-hots
+    output[ord(letter.upper())-65] = 1
+    
+    # Set interaction terms
+    for i in range(5):
+        output[i+5] = output[i] * number
+    
+    # Remove the one-hot for E
+    output = np.delete(output,4)
+    
+    # Calculate the center of mass on the midgame turn
+    index = game_dict['middle_game_index']
+    if index:
+        # Midgame was reached
+        piece_dict = game_dict['white_pieces'][index]
+        piece_locations_array = list(piece_dict.values())
+        piece_x_locations = [coord[0] for sublist in piece_locations_array for coord in sublist]
+        output[-1] = (np.mean(piece_x_locations) - 4.5) / 3.5
+    
+    return output
+
+
+Time to castle
+Castle side
+Castle side relative to opponent
+Artificial castling
+Early development on castling side
+
+## Outputs a list [time, side, side_relative, artificial, development] where
+## time : float in [0,1], 1/(the turn they castled), 0 if no castle
+## side : +1 for king side, -1 for queen side, 0 for no castle
+## side_relative : +1 for same side as opponent, -1 for opposite side, 0 if one of them didn't castle
+## artificial : 0 if bonafide castle, 1 if artificial
+## development : float in [0,1] for how full the back rank opposite their castling side is
+##               calculated as (# pieces there) / 4, 0 if no castling
+def white_castling(game_dict):
+    
+    # Find out if they castled, which side, and which turn
+    castled = False
+    for move in game_dict['white_moves']:
+        if move['special'] == 'O-O':
+            # King side
+            castled = True
+            side = 1
+            index = move['move_number']
+        elif move['special'] == 'O-O-O':
+            # Queen side
+            castled = True
+            side = -1
+            index = move['move_number']
+        if castled:
+            break
+            
+    # Cases on whether they castled
+    if castled:
+        # FIXME
+    else:
+        output = [0, 0, 0, 0, 0]
+
 ### discovered_checks function
 ### INPUT: takes in a game dict
 ### OUTPUT: dictionary of the following data
@@ -427,5 +500,4 @@ def discovered_checks(gameDict):
 			discovered_checks_set_up += check_chance_flag
 
 	return {'discovered_checks_set_up' : discovered_checks_set_up, 'discovered_checks_given' :discovered_checks_given, 'discovered_checks_chances' :discovered_checks_chances}
-
 
