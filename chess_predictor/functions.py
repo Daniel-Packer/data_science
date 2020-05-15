@@ -367,13 +367,6 @@ def white_development(game_dict):
     
     return output
 
-
-Time to castle
-Castle side
-Castle side relative to opponent
-Artificial castling
-Early development on castling side
-
 ## Outputs a list [time, side, side_relative, artificial, development] where
 ## time : float in [0,1], 1/(the turn they castled), 0 if no castle
 ## side : +1 for king side, -1 for queen side, 0 for no castle
@@ -400,10 +393,10 @@ def white_castling(game_dict):
             break
             
     # Cases on whether they castled
-    if castled:
+    #if castled:
         # FIXME
-    else:
-        output = [0, 0, 0, 0, 0]
+    #else:
+    #    output = [0, 0, 0, 0, 0]
 
 ### discovered_checks function
 ### INPUT: takes in a game dict
