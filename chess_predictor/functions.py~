@@ -349,7 +349,7 @@ def knight_features(game_dict):
     # First check that we make it to the middle game:
     end_game_index = 0 ## This line shouldn't be necessary, just here in case we somehow get to the second if without hitting the first
     #if (game_dict['end_game_index'] == None):
-    end_game_index = int(len(game_dict['board_states'])/2 - 1)
+    end_game_index = (len(game_dict['board_states'])/2 - 1)
 
     ## A few lines here are commented out to avoid mid-game filtering, once the issues are fixed, they should be reintroduced
     #if not (game_dict['middle_game_index'] == None):
