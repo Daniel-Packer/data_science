@@ -31,7 +31,11 @@ def get_dicts(player_name, num_games, time_type, format_):
 def make_test_data(file_name, player_name, num_games, time_type):
     with open(file_name, 'w') as f:
         json.dump(get_dicts(player_name, num_games, time_type, SINGLE_PGN), f)
-        
+
+########################################
+### Processing Data
+########################################        
+
 
 ### The get_gameDict function reads in a lichess pgn string and returns a game dictionary
 
@@ -48,6 +52,11 @@ def make_test_data(file_name, player_name, num_games, time_type):
 ### 'white_pieces': list (same length as 'board_states') of dicts of lists of tuples of piece locations that board state
 ###     ex. The first entry is {'P': [(rank,file),...], 'N': [...], ...}
 ### 'black_pieces': same as white_pieces, but for black's pieces
+### middle_game_index: returns an int corresponding to the first half move of the mid-game. The middle game is defined to start when there are 10 or fewer minor/major pieces, or 
+###	when the back rank of each player has four or fewer pieces. 
+###	If the game is too short to reach mid-game, the index is None.
+### end_game_index: returns an int corresponding to the first half move of the endgame. The end game is defined to start when there are 6 or fewer minor/major pieces on the board.
+###	If the game is too short to reach endgame, the index in None.
 
 ### move dictionary
 ### the move dictionary has the following keys
@@ -66,7 +75,7 @@ def make_test_data(file_name, player_name, num_games, time_type):
 
 def get_gameDict(gamepgn):
 	#creates the game dictionary
-	gameDict = {'white_moves' : [], 'black_moves' :[], 'board_states' :[], 'board_states_FEN' :[], 'white_pieces': [], 'black_pieces': [] }
+	gameDict = {'white_moves' : [], 'black_moves' :[], 'board_states' :[], 'board_states_FEN' :[], 'white_pieces': [], 'black_pieces': [],'middle_game_index' : None, 'end_game_index' : None }
 	
 	#reads in white_player
 	name_start = gamepgn.find('White "') +7
@@ -165,6 +174,29 @@ def get_gameDict(gamepgn):
 		white_pieces, black_pieces = get_piece_locations(board_state)
 		gameDict['white_pieces'].append(white_pieces)
 		gameDict['black_pieces'].append(black_pieces)
+
+		#checks if midgame 
+		#counts numbers of minor/major pieces
+		major_minor_piece_count = len(gameDict['white_pieces'][move_counter]['N']) +len(gameDict['white_pieces'][move_counter]['B'])+len(gameDict['white_pieces'][move_counter]['R'])+len(gameDict['white_pieces'][move_counter]['Q']) +len(gameDict['black_pieces'][move_counter]['N'])+ len(gameDict['black_pieces'][move_counter]['R']) +len(gameDict['black_pieces'][move_counter]['Q'])         
+		if gameDict['middle_game_index'] == None :
+			#gets the number of pieces on the back ranks
+			back_rank_pieces_white = 0
+			back_rank_pieces_black = 0
+			for pieces_list in [gameDict['white_pieces'][move_counter]['N'],	gameDict['white_pieces'][move_counter]['B'], gameDict['white_pieces'][move_counter]['R'], gameDict['white_pieces'][move_counter]['Q']]: 
+				for piece in pieces_list:
+					if piece[1] == 0: back_rank_pieces_white += 1
+			for pieces_list in [gameDict['black_pieces'][move_counter]['N'],	gameDict['black_pieces'][move_counter]['B'], gameDict['black_pieces'][move_counter]['R'], gameDict['black_pieces'][move_counter]['Q']]: 
+				for piece in pieces_list:
+					if  piece[1] == 7: back_rank_pieces_black += 1
+
+
+			#set the counter if major_minor_piece_count <= 10 or back_rank_pieces <= 3 for each of black and white
+			if (major_minor_piece_count <= 10) or (back_rank_pieces_white <= 3 and back_rank_pieces_black <= 3): 
+				gameDict['middle_game_index'] = move_counter
+		
+		#checks if endgame
+		if gameDict['end_game_index'] == None and major_minor_piece_count <= 6:
+			gameDict['end_game_index'] = move_counter
         
 		#check is mate or checkmate
 		if current_board.is_check(): move_dict["check"] = "+"
