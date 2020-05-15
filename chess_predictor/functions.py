@@ -130,8 +130,8 @@ def get_gameDict(gamepgn):
 		current_move = current_board.parse_san(move)
 
 		#writes the to and from squares
-		move_dict["to"] = [(current_move.to_square % 8) +1, (current_move.to_square // 8) +1 ]
-		move_dict["from"] = [(current_move.from_square % 8) +1, (current_move.from_square // 8) +1 ]
+		move_dict["to"] = [(current_move.to_square % 8), (current_move.to_square // 8)  ]
+		move_dict["from"] = [(current_move.from_square % 8) , (current_move.from_square // 8)  ]
 		#checks if there was en passant
 		if current_board.is_en_passant(current_move):
 			move_dict["special"] = "p"
@@ -302,6 +302,7 @@ def two_minor_pieces_turns(game_dict):
     
     return white_board_index, black_board_index, white_turn_index, black_turn_index
 
+### is_guarded function
 
 ### INPUT: is_guarded reads in a tuple of integers [file, rank] corresponding to position in question and the FEN of the current board state
 ### OUTPUT: returns a list of tuples corresponding to the squares of the pieces guarding the piece
@@ -330,6 +331,7 @@ def is_guarded(p_sq, board_state_FEN):
 ########################################
 ### Features
 ########################################
+
 
 ## Outputs a list [A,B,C,D,A#,B#,C#,D#,E#,side] where
 ## A,B,C,D : one-hots for ECO codes (omit E)
@@ -402,3 +404,97 @@ def white_castling(game_dict):
         # FIXME
     else:
         output = [0, 0, 0, 0, 0]
+
+### discovered_checks function
+### INPUT: takes in a game dict
+### OUTPUT: dictionary of the following data
+### discovered_checks_set_up : an integer corresponding the number of times the white player
+### 	set up a discovered check
+### discovered_checks_chances : an integer corresponding to the number of turns the white 
+### 	player could give a discovered check 
+### discovered_checks_given : int of moves in which  a player gives a discovered check 
+###
+### A discovered check is defined to be when white moves a piece, giving a check on the 
+### black king with another piece
+
+def discovered_checks(gameDict):
+	discovered_checks_set_up = 0
+	discovered_checks_chances = 0
+	discovered_checks_given = 0
+
+	#looks at where there was a discovered check given
+	# goes through white moves and see where there was a check
+	check_list = []
+	for i in range(0, len(gameDict['white_moves'])):
+		if gameDict['white_moves'][i]['check'] != '':
+			check_list.append(i)
+	
+	# goes through the list of checks and sees if the check was a discovered check
+	for i in check_list:	
+		#loads board_state_FEN corresponding to after the move
+		fen = gameDict["board_states_FEN"][2*i]
+		board = chess.Board(fen)
+		
+		#gets list of attackers on the black king
+		attackers = board.attackers(chess.WHITE, board.king(chess.BLACK))
+	
+		#checks if there is an attacker that is not the piece moved
+		move_square = chess.square(gameDict['white_moves'][i]['to'][0], gameDict['white_moves'][i]['to'][1])
+		if move_square in attackers: attackers.remove(move_square)
+		if len(attackers) > 0:
+			discovered_checks_given  += 1
+
+	#goes through to see list of where a discovered check could be given
+	for i in range(1, len(gameDict['white_moves'])):
+		# create board state before white's move
+		board = chess.Board(gameDict['board_states_FEN'][2*i -1])
+		check_chance_flag = 0	
+
+		for move in board.legal_moves:
+			if board.gives_check(move):
+				board1 = board.copy()
+				board1.push(move)
+				
+								
+				#gets list of attackers on the black king
+				attackers = board1.attackers(chess.WHITE, board1.king(chess.BLACK))
+				#checks if there is an attacker that is not the piece moved
+				move_square = 	move.to_square
+				if move_square in attackers: attackers.remove(move_square)
+				if len(attackers) > 0:
+					check_chance_flag  = 1
+		discovered_checks_chances += check_chance_flag
+
+	# check where a discovered check is set up. We define this to be move where, if black
+	# didn't move, there would be a discovered check chance, note this doesn't apply when
+	# there is a check
+	for i in range(1, len(gameDict['white_moves'])):
+		#checks if the move didn't just give check
+		if gameDict['white_moves'][i]['check'] == '':
+	
+			# get move for after  white's move and sets the move to white again
+			fen1  = gameDict['board_states_FEN'][2*i]
+			fen = fen1[: fen1.find(" b ") +1] + "w" + fen1[fen1.find(" b ") +2:]
+
+			# creates board and checks if there is a discovered check possible
+			board = chess.Board(fen)		
+			check_chance_flag = 0	
+
+			for move in board.legal_moves:
+				if board.gives_check(move):
+					board1 = board.copy()
+					board1.push(move)
+								
+					#gets list of attackers on the black king
+					attackers = board1.attackers(chess.WHITE, board1.king(chess.BLACK))
+	
+					#checks if there is an attacker that is not the piece moved
+					move_square = move.to_square
+					if move_square in attackers: 
+						attackers.remove(move_square)
+					if len(attackers) > 0:
+						check_chance_flag  = 1
+			discovered_checks_set_up += check_chance_flag
+
+	return {'discovered_checks_set_up' : discovered_checks_set_up, 'discovered_checks_given' :discovered_checks_given, 'discovered_checks_chances' :discovered_checks_chances}
+
