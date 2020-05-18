@@ -340,6 +340,7 @@ def knight_features(game_dict):
     knight_pair = 0
     knight_outpost_turns = 0
     knight_repo_counter = 0
+    knight_attack_counter = 0
     
     ## Check whether when there are only two minor pieces in play, those pieces are knights.
     if (len(game_dict['white_pieces'][two_minor_pieces_turns(game_dict)[0]]['N']) == 2):
@@ -348,15 +349,18 @@ def knight_features(game_dict):
     ## The following will iterate through midgame turns to check each board state for various features:
     # First check that we make it to the middle game:
     end_game_index = 0 ## This line shouldn't be necessary, just here in case we somehow get to the second if without hitting the first
-    #if (game_dict['end_game_index'] == None):
-    end_game_index = (len(game_dict['board_states'])/2 - 1)
+    if (game_dict['end_game_index'] == None):
+        end_game_index = int(len(game_dict['board_states']) - 1)
+        ## In case the game ends before the endgame, this sets the endgame to be the last move in the game.
+    else:
+        end_game_index = game_dict['end_game_index']
 
-    ## A few lines here are commented out to avoid mid-game filtering, once the issues are fixed, they should be reintroduced
-    #if not (game_dict['middle_game_index'] == None):
-    if (True):
-    #    for turn in range(game_dict['middle_game_index'], end_game_index):
-        for turn in range(0, end_game_index):
+    if (not (game_dict['middle_game_index'] == None)):
+        for turn in range(int(game_dict['middle_game_index']/2), int(end_game_index/2)):
+            ## The knight outpost code has been shunted off to the detect_outpost code below:
             knight_outpost_turns += detect_outpost(game_dict, turn, player)
+
+            ## The following counts the knight repositioning
             if (game_dict[player+'_moves'][turn]['piece'] == 'N'): 
                 ## the above checks if the player moved a knight this turn, then:
                 for move in game_dict[player+'_moves']:
@@ -364,9 +368,18 @@ def knight_features(game_dict):
                     if ((move['piece'] == 'N') and (move['move_number']/2 != turn)):
                         knight_repo_counter += 1 / abs(move['move_number']/2 - turn)
 
+            ## Now, we count the number of squares attacked by the knights at a given turn:
+            board = chess.Board(game_dict['board_states_FEN'][turn*2+1])
+            for move in board.legal_moves:
+                if (str(board.piece_at(move.from_square)) == 'N'):
+                    knight_attack_counter += 1
+    
+        ## Scale the repositioning and attack counters by the total number of moves in the mid-game, so longer mid-games don't get overbiased.
+        knight_repo_counter = knight_repo_counter / (end_game_index - game_dict['middle_game_index'])
+        knight_attack_counter = knight_attack_counter / (end_game_index - game_dict['middle_game_index']) 
 
 
-    return knight_pair, knight_outpost_turns, knight_repo_counter
+    return knight_pair, knight_outpost_turns, knight_repo_counter, knight_attack_counter
 
 
 ## The following detects a knight outpost in a specific turn for a player inputted as either 'white' or 'black'
