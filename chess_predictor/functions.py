@@ -130,8 +130,8 @@ def get_gameDict(gamepgn):
 		current_move = current_board.parse_san(move)
 
 		#writes the to and from squares
-		move_dict["to"] = [(current_move.to_square % 8) +1, (current_move.to_square // 8) +1 ]
-		move_dict["from"] = [(current_move.from_square % 8) +1, (current_move.from_square // 8) +1 ]
+		move_dict["to"] = [(current_move.to_square % 8), (current_move.to_square // 8)  ]
+		move_dict["from"] = [(current_move.from_square % 8) , (current_move.from_square // 8)  ]
 		#checks if there was en passant
 		if current_board.is_en_passant(current_move):
 			move_dict["special"] = "p"
@@ -302,6 +302,7 @@ def two_minor_pieces_turns(game_dict):
     
     return white_board_index, black_board_index, white_turn_index, black_turn_index
 
+### is_guarded function
 
 ### INPUT: is_guarded reads in a tuple of integers [file, rank] corresponding to position in question and the FEN of the current board state
 ### OUTPUT: returns a list of tuples corresponding to the squares of the pieces guarding the piece
@@ -330,7 +331,6 @@ def is_guarded(p_sq, board_state_FEN):
 ########################################
 ### Features
 ########################################
-
 
 ### Knight Features function, will return a list of the form [Knight pair, knight outposts, knight repositioning, number of squares controlled].
 def knight_features(game_dict):
@@ -418,3 +418,287 @@ def detect_outpost(game_dict, turn, player):
             if (potential_attackers == 0):
                 outpost_counter += 1
     return outpost_counter
+
+## Outputs a list [A,B,C,D,A#,B#,C#,D#,E#,side] where
+## A,B,C,D : one-hots for ECO codes (omit E)
+## A#,B#,C#,D#,E# : interaction terms, the one-hot times the number of the opening
+## side : Float in [-1,1] i.e. Queen to King for white's preferred development side
+##       Measures this by finding the center of mass at the start of the midgame, or 0 if midgame is not reached
+def white_development(game_dict):
+    # I'll include a one-hot for E at first, remove it later
+    output = np.zeros(11)
+    
+    # Opening info from the dict
+    letter = game_dict['opening'][0]
+    number = int(game_dict['opening'][1:])
+    
+    # Set one-hots
+    output[ord(letter.upper())-65] = 1
+    
+    # Set interaction terms
+    for i in range(5):
+        output[i+5] = output[i] * number
+    
+    # Remove the one-hot for E
+    output = np.delete(output,4)
+    
+    # Calculate the center of mass on the midgame turn
+    index = game_dict['middle_game_index']
+    if index:
+        # Midgame was reached
+        piece_dict = game_dict['white_pieces'][index]
+        piece_locations_array = list(piece_dict.values())
+        piece_x_locations = [coord[0] for sublist in piece_locations_array for coord in sublist]
+        output[-1] = (np.mean(piece_x_locations) - 3.5) / 3.5
+    
+    return output
+
+## Outputs a list [earliness, side, side_relative, artificial, development] where
+## earliness : float in [0,1], 1/(the turn they castled), 0 if no castle
+## side : +1 for king side, -1 for queen side, 0 for no castle
+## side_relative : +1 for same side as opponent, -1 for opposite side, 0 if one of them didn't castle
+## artificial : 0 if bonafide castle, 1 if artificial
+## development : float in [0,1] for how empty the back rank opposite their castling side is
+##               calculated as 1 - (# pieces there) / 3, 0 if no castling
+## So if white castles and they developed their queen side N and B but the R is still there, then development = 0.66
+
+def white_castling(game_dict):
+    
+    # Call helper function to check who castled, which side, and when
+    index_white, side_white, artificial_white = castle_index(game_dict,True)
+    index_black, side_black, artificial_black = castle_index(game_dict,False)
+    
+    # Set the earliness
+    if index_white:
+        earliness = 1 / index_white
+    else:
+        earliness = 0
+        
+    # Set the relative side
+    side_relative = side_white * side_black
+    
+    # Set the development
+    if side_white == 0: # No castle
+        development = 0
+    elif side_white == 1: # King side castle, count number of pieces in a1,b1,c1
+        piece_count = 0
+        print('counting')
+        # For x indices 0, 1, 2
+        for i in range(3):
+            # Check if there is a piece in square (i,0) at the time of the castle
+            if game_dict['board_states'][index_white][i][0]:
+                piece_count = piece_count + 1
+        development = 1- piece_count / 3
+    else: # Queen side castle, count number of pieces in f1,g1,h1
+        piece_count = 0
+        # For x indices 5, 6, 7
+        for i in range(5,8):
+            # Check if there is a piece in square (i,0) at the time of the castle
+            if game_dict['board_states'][index_white][i][0]:
+                piece_count = piece_count + 1
+        development = 1 - piece_count / 3
+        
+    return (earliness, side_white, side_relative, artificial_white, development)
+
+## Helper function to find castles
+## Pass it the game_dict and a boolean for which player to check: True = white, False = black
+##
+## Returns (index, side, artificial):
+## index : index of the board position of castling, None if no castle
+## side : +1 for king side, -1 for queen side, 0 for neither
+## artificial : 1 if the castle was artificial, 0 otherwise
+##
+## An artificial castle will be:
+## - Any time through the mid game
+## - King not on the d/e files
+## - King on the back rank
+## - King to the left/right of all its rooks
+##
+def castle_index(game_dict,player):
+    
+    # Find out if they did a real castle, which side, and which turn
+    castled = False
+    if player:
+        key = 'white_moves'
+    else:
+        key = 'black_moves'
+    for move in game_dict[key]:
+        if move['special'] == 'O-O':
+            # King side
+            castled = True
+            side = 1
+            index = move['move_number']
+        elif move['special'] == 'O-O-O':
+            # Queen side
+            castled = True
+            side = -1
+            index = move['move_number']
+        if castled:
+            return index, side, 0
+    
+    # If we got here, we didn't do a real castle. So, check for artificial castling:            
+    # We'll look for artificial castling up to the end game, or the whole game if we never reach the end game
+    # Get the locations of their pieces the turns they move
+    if game_dict['end_game_index']:
+        # If we got to the end game
+        max_index = game_dict['end_game_index']
+        if player:
+            pieces = game_dict['white_pieces'][:max_index:2]
+        else:
+            pieces = game_dict['black_pieces'][1:max_index:2]
+    else:
+        # If we didn't get to the end game
+        if player:
+            pieces = game_dict['white_pieces'][::2]
+        else:
+            pieces = game_dict['black_pieces'][1::2]
+
+    # Specifically, the king and rooks
+    king_positions = [move['K'] for move in pieces]
+    rook_positions = [move['R'] for move in pieces]
+
+    # Loop over these positions to find the index of the castle
+    index = None
+    for i in range(len(king_positions)):
+        king_pos = king_positions[i][0]
+
+        # If we're still on the d/e files, keep searching
+        if (king_pos[0] == 4) | (king_pos[0] == 3): continue
+            
+        # If we're not on our starting rank, keep searching
+        if player & (king_pos[1] != 0): continue
+        elif (not player) & (king_pos[1] != 7): continue
+
+        # Check if I am to the right or left of all my rooks:
+        # Right (for each rook, check if we're to the right of its x index; then see if this is true for all rooks)
+        if all([(rook_pos[0] < king_pos[0]) for rook_pos in rook_positions[i]]):
+            index = i
+            side = 1 # King side castle
+            break
+        # Left
+        elif all([(rook_pos[0] > king_pos[0]) for rook_pos in rook_positions[i]]):
+            index = i
+            side = -1 # Queen side castle
+            break
+    # Note that when we set index = i this indexes white/black's moves, not the board positions
+    
+    # If we artificial castled, return that
+    if index:
+        index = game_dict[key][i]['move_number']
+        return index, side, 1
+    # Otherwise, no castle of any sort
+    else:
+        return None, 0, 0      
+
+### discovered_checks function
+### INPUT: takes in a game dict
+### OUTPUT: dictionary of the following data
+### discovered_checks_set_up : an integer corresponding the number of times the white player
+### 	set up a discovered check
+### discovered_checks_chances : an integer corresponding to the number of turns the white 
+### 	player could give a discovered check 
+### discovered_checks_given : int of moves in which  a player gives a discovered check 
+###
+### A discovered check is defined to be when white moves a piece, giving a check on the 
+### black king with another piece
+
+def discovered_checks(gameDict):
+	discovered_checks_set_up = 0
+	discovered_checks_chances = 0
+	discovered_checks_given = 0
+
+	#looks at where there was a discovered check given
+	# goes through white moves and see where there was a check
+	check_list = []
+	for i in range(0, len(gameDict['white_moves'])):
+		if gameDict['white_moves'][i]['check'] != '':
+			check_list.append(i)
+	
+	# goes through the list of checks and sees if the check was a discovered check
+	for i in check_list:	
+		#loads board_state_FEN corresponding to after the move
+		fen = gameDict["board_states_FEN"][2*i]
+		board = chess.Board(fen)
+		
+		#gets list of attackers on the black king
+		attackers = board.attackers(chess.WHITE, board.king(chess.BLACK))
+	
+		#checks if there is an attacker that is not the piece moved
+		move_square = chess.square(gameDict['white_moves'][i]['to'][0], gameDict['white_moves'][i]['to'][1])
+		if move_square in attackers: attackers.remove(move_square)
+		if len(attackers) > 0:
+			discovered_checks_given  += 1
+			print("d check give: ", i)
+
+	#goes through to see list of where a discovered check could be given
+	for i in range(1, len(gameDict['white_moves'])):
+		# create board state before white's move
+		board = chess.Board(gameDict['board_states_FEN'][2*i -1])
+		check_chance_flag = 0	
+
+		for move in board.legal_moves:
+			if board.gives_check(move):
+				board1 = board.copy()
+				board1.push(move)
+				
+								
+				#gets list of attackers on the black king
+				attackers = board1.attackers(chess.WHITE, board1.king(chess.BLACK))
+				#checks if there is an attacker that is not the piece moved
+				move_square = 	move.to_square
+				if move_square in attackers: attackers.remove(move_square)
+				if len(attackers) > 0:
+					check_chance_flag  = 1
+		if check_chance_flag: print("d check chance: ", i)
+		discovered_checks_chances += check_chance_flag
+
+	# check where a discovered check is set up. We define this to be move where, if black
+	# didn't move, there would be a discovered check chance, note this doesn't apply when
+	# there is a check
+	for i in range(1, len(gameDict['white_moves'])):
+		#checks if the move didn't just give check
+		if gameDict['white_moves'][i]['check'] == '':
+	
+			# get move for after  white's move and sets the move to white again
+			fen1  = gameDict['board_states_FEN'][2*i]
+			fen = fen1[: fen1.find(" b ") +1] + "w" + fen1[fen1.find(" b ") +2:]
+
+			# creates board and checks if there is a discovered check possible
+			board = chess.Board(fen)		
+			check_chance_flag = 0	
+
+			for move in board.legal_moves:
+				if board.gives_check(move):
+					board1 = board.copy()
+					board1.push(move)
+								
+					#gets list of attackers on the black king
+					attackers = board1.attackers(chess.WHITE, board1.king(chess.BLACK))
+	
+					#checks if there is an attacker that is not the piece moved
+					move_square = move.to_square
+					if move_square in attackers: 
+						attackers.remove(move_square)
+					if len(attackers) > 0:
+						check_chance_flag  = 1
+			if check_chance_flag: print("d check set ", i)
+			discovered_checks_set_up += check_chance_flag
+
+	return {'discovered_checks_set_up' : discovered_checks_set_up, 'discovered_checks_given' :discovered_checks_given, 'discovered_checks_chances' :discovered_checks_chances}
+
+
+### distribution_piece_moves function
+###
+### Input: gameDict
+### Output: dictionary with keys 'P', 'N', 'B', 'R', 'Q', 'K' with values of percentage of time that type of piece was moved
+
+def distribution_piece_moves(gameDict):
+	dict = {'P':0, 'N':0, 'B':0, 'R':0, 'Q':0, 'K':0}
+
+	for i in range(0, len(gameDict['white_moves'])):
+		piece = gameDict['white_moves'][i]['piece']
+		if piece == 'O':
+			dict['K'] +=1/len(gameDict['white_moves'])
+			dict['R'] +=1/len(gameDict['white_moves'])
+		else: dict[piece] +=1/len(gameDict['white_moves'])
+	return dict
