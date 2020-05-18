@@ -476,6 +476,41 @@ def chain_helper(skewed_pawns, j):
     
     return count, longest_chain
 
+## The following detects a knight outpost in a specific turn for a player inputted as either 'white' or 'black'
+def detect_outpost(game_dict, turn, player):
+    board = game_dict['board_states'][turn]
+    outpost_counter = 0 ## This value should never exceed 2, unless someone promotes to a knight and already has 2 on the board.
+    if (player == 'white'):
+        foe = 'black'
+    else:
+        foe = 'white'
+    for knight in game_dict[player+'_pieces'][turn]['N']:
+        potential_attackers = 0
+        if (player == 'white'):
+            ## We only consider it an 'outpost' if it's on the opponents side of the board:
+            if (knight[1] < 4):
+                break
+            for pawn in game_dict[foe+ '_pieces'][turn]['P']:
+                ## Checks if the pawn is in a file adjacent to the knight far enough back that it may attack the knight
+                if ((abs(pawn[0] - knight[0]) == 1) and (pawn[1] > knight[1])):
+                    potential_attackers += 1
+            ## If there are no potential pawn attackers, we call the knight 'an outpost'
+            if (potential_attackers == 0):
+                outpost_counter += 1
+
+        if (player == 'black'):
+            ## We only consider it an 'outpost' if it's on the opponents side of the board:
+            if (knight[1] > 3):
+                break
+            for pawn in game_dict[foe+ '_pieces'][turn]['P']:
+                ## Checks if the pawn is in a file adjacent to the knight far enough back that it may attack the knight
+                if ((abs(pawn[0] - knight[0]) == 1) and (pawn[1] < knight[1])):
+                    potential_attackers += 1
+            ## If there are no potential pawn attackers, we call the knight 'an outpost'
+            if (potential_attackers == 0):
+                outpost_counter += 1
+    return outpost_counter
+
 
         
 ########################################
@@ -520,7 +555,7 @@ def knight_features(game_dict):
 
             ## Now, we count the number of squares attacked by the knights at a given turn:
             # We get the FEN for white: (remove the +1 to get the FEN for black)
-            board = chess.Board(game_dict['board_states_FEN'][turn*2+1])
+            board = chess.Board(game_dict['board_states_FEN'][turn*2])
             # We then check every legal move to see if the piece that can be moved is a knight, if so, we add one to the move counter. To change this to work for black, we need to make the 'N' lowercase or apply .toUpper() both so that we don't need the strings to match case
             for move in board.legal_moves:
                 if (str(board.piece_at(move.from_square)) == 'N'):
@@ -533,41 +568,6 @@ def knight_features(game_dict):
 
     return knight_pair, knight_outpost_turns, knight_repo_counter, knight_attack_counter
 
-
-## The following detects a knight outpost in a specific turn for a player inputted as either 'white' or 'black'
-def detect_outpost(game_dict, turn, player):
-    board = game_dict['board_states'][turn]
-    outpost_counter = 0 ## This value should never exceed 2, unless someone promotes to a knight and already has 2 on the board.
-    if (player == 'white'):
-        foe = 'black'
-    else:
-        foe = 'white'
-    for knight in game_dict[player+'_pieces'][turn]['N']:
-        potential_attackers = 0
-        if (player == 'white'):
-            ## We only consider it an 'outpost' if it's on the opponents side of the board:
-            if (knight[1] < 4):
-                break
-            for pawn in game_dict[foe+ '_pieces'][turn]['P']:
-                ## Checks if the pawn is in a file adjacent to the knight far enough back that it may attack the knight
-                if ((abs(pawn[0] - knight[0]) == 1) and (pawn[1] > knight[1])):
-                    potential_attackers += 1
-            ## If there are no potential pawn attackers, we call the knight 'an outpost'
-            if (potential_attackers == 0):
-                outpost_counter += 1
-
-        if (player == 'black'):
-            ## We only consider it an 'outpost' if it's on the opponents side of the board:
-            if (knight[1] > 3):
-                break
-            for pawn in game_dict[foe+ '_pieces'][turn]['P']:
-                ## Checks if the pawn is in a file adjacent to the knight far enough back that it may attack the knight
-                if ((abs(pawn[0] - knight[0]) == 1) and (pawn[1] < knight[1])):
-                    potential_attackers += 1
-            ## If there are no potential pawn attackers, we call the knight 'an outpost'
-            if (potential_attackers == 0):
-                outpost_counter += 1
-    return outpost_counter
 
 ## Outputs a list [A,B,C,D,A#,B#,C#,D#,E#,side] where
 ## A,B,C,D : one-hots for ECO codes (omit E)
