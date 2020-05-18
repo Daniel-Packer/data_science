@@ -326,8 +326,45 @@ def is_guarded(p_sq, board_state_FEN):
 
 	return guarding_pieces
 
+### is_pinned function
+### 
+### INPUT: takes tuple of integers [file, rank] corresponding to position and FEN of the board
+### OUTPUT: boolean 1 if pinned, 2 if not pinned
+### EXCEPTIONS: if called when piece's color is in check, if not a piece on the square, or if it isn't the piece's turn to move
 
-        
+def is_pinned(p_sq, board_state_FEN):
+	is_pinned_flag = False
+
+	#creates values for the pieces
+	values = {'P':0, 'N':3, 'B':3, 'R':5, 'Q':9}
+
+
+	#creates a baseboard object in python chess
+	board = chess.Board(board_state_FEN)
+
+	#check is in check
+	if board.is_check(): raise Exception("turn to move is in check")
+
+
+	#converts the piece_square tuple to a chess.SQUARE
+	sq = chess.square(p_sq[0],p_sq[1])
+
+	# looks at the piece on the square
+	piece = board.piece_type_at(sq)
+	color = board.piece_at(sq).color
+	
+	#checks if correct color to move
+	if color != board.turn: raise Exception("not right turn to move")
+	
+	#throws error if no piece
+	if piece == None:
+		raise Exception("not a piece at this square")
+	
+	#checks	if pinned to king
+	if board.is_pinned(color, sq): return True
+      
+	 
+	#because not pinned, removing the piece is valid, so we will look at all the possible moves with the piece on the board, and then all 
 ########################################
 ### Features
 ########################################
@@ -367,7 +404,6 @@ def white_development(game_dict):
     
     return output
 
-<<<<<<< HEAD
 
 #Time to castle
 #Castle side
@@ -375,8 +411,6 @@ def white_development(game_dict):
 #Artificial castling
 #Early development on castling side
 
-=======
->>>>>>> 5f6d199b776bf800049248e56d48afc08930658b
 ## Outputs a list [time, side, side_relative, artificial, development] where
 ## time : float in [0,1], 1/(the turn they castled), 0 if no castle
 ## side : +1 for king side, -1 for queen side, 0 for no castle
@@ -403,10 +437,11 @@ def white_castling(game_dict):
             break
             
     # Cases on whether they castled
-    #if castled:
-        # FIXME
-    #else:
-    #    output = [0, 0, 0, 0, 0]
+    if castled:
+        output = [0,0,0,0,0]
+	# FIXME
+    else:
+        output = [0, 0, 0, 0, 0]
 
 ### discovered_checks function
 ### INPUT: takes in a game dict
