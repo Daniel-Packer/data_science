@@ -244,6 +244,8 @@ def board_move(FENs, i):
 def feature_test(game_dict, feature_list):
     print('White Player:', game_dict['white_player'])
     print('Black Player:', game_dict['black_player'])
+    print('Midgame:',game_dict['middle_game_index'])
+    print('Endgame:',game_dict['end_game_index'])
     ## Read out the FENs so we don't need to call the dictionary:
     FENs = game_dict['board_states_FEN']
     ## Produce the interactive widget...lambda stuff deals with the fact that board_move takes 2 inputs, not 1
@@ -304,7 +306,7 @@ def two_minor_pieces_turns(game_dict):
 
 ### is_guarded function
 
-### INPUT: is_guarded reads in a tuple of integers [file, rank] corresponding to position in question and the FEN of the current board state
+### INPUT: reads in a tuple of integers [file, rank] corresponding to position in question and the FEN of the current board state
 ### OUTPUT: returns a list of tuples corresponding to the squares of the pieces guarding the piece
 
 def is_guarded(p_sq, board_state_FEN):
@@ -327,92 +329,31 @@ def is_guarded(p_sq, board_state_FEN):
 	return guarding_pieces
 
 
-        
-########################################
-### Features
-########################################
-
-
-## Outputs a list [A,B,C,D,A#,B#,C#,D#,E#,side] where
-## A,B,C,D : one-hots for ECO codes (omit E)
-## A#,B#,C#,D#,E# : interaction terms, the one-hot times the number of the opening
-## side : Float in [-1,1] i.e. Queen to King for white's preferred development side
-##       Measures this by finding the center of mass at the start of the midgame, or 0 if midgame is not reached
-def white_development(game_dict):
-    # I'll include a one-hot for E at first, remove it later
-    output = np.zeros(11)
-    
-    # Opening info from the dict
-    letter = game_dict['opening'][0]
-    number = int(game_dict['opening'][1:])
-    
-    # Set one-hots
-    output[ord(letter.upper())-65] = 1
-    
-    # Set interaction terms
-    for i in range(5):
-        output[i+5] = output[i] * number
-    
-    # Remove the one-hot for E
-    output = np.delete(output,4)
-    
-    # Calculate the center of mass on the midgame turn
-    index = game_dict['middle_game_index']
-    if index:
-        # Midgame was reached
-        piece_dict = game_dict['white_pieces'][index]
-        piece_locations_array = list(piece_dict.values())
-        piece_x_locations = [coord[0] for sublist in piece_locations_array for coord in sublist]
-        output[-1] = (np.mean(piece_x_locations) - 3.5) / 3.5
-    
-    return output
-
-## Outputs a list [earliness, side, side_relative, artificial, development] where
-## earliness : float in [0,1], 1/(the turn they castled), 0 if no castle
-## side : +1 for king side, -1 for queen side, 0 for no castle
-## side_relative : +1 for same side as opponent, -1 for opposite side, 0 if one of them didn't castle
-## artificial : 0 if bonafide castle, 1 if artificial
-## development : float in [0,1] for how empty the back rank opposite their castling side is
-##               calculated as 1 - (# pieces there) / 3, 0 if no castling
-## So if white castles and they developed their queen side N and B but the R is still there, then development = 0.66
-
-def white_castling(game_dict):
-    
-    # Call helper function to check who castled, which side, and when
-    index_white, side_white, artificial_white = castle_index(game_dict,True)
-    index_black, side_black, artificial_black = castle_index(game_dict,False)
-    
-    # Set the earliness
-    if index_white:
-        earliness = 1 / index_white
+## Helper function to return the index of halfway through the early game
+## Input: game_dict
+## Output: index for board_states
+def mid_earlygame(game_dict):
+    if game_dict['middle_game_index']:
+        index = int(game_dict['middle_game_index'] / 2)
     else:
-        earliness = 0
-        
-    # Set the relative side
-    side_relative = side_white * side_black
-    
-    # Set the development
-    if side_white == 0: # No castle
-        development = 0
-    elif side_white == 1: # King side castle, count number of pieces in a1,b1,c1
-        piece_count = 0
-        print('counting')
-        # For x indices 0, 1, 2
-        for i in range(3):
-            # Check if there is a piece in square (i,0) at the time of the castle
-            if game_dict['board_states'][index_white][i][0]:
-                piece_count = piece_count + 1
-        development = 1- piece_count / 3
-    else: # Queen side castle, count number of pieces in f1,g1,h1
-        piece_count = 0
-        # For x indices 5, 6, 7
-        for i in range(5,8):
-            # Check if there is a piece in square (i,0) at the time of the castle
-            if game_dict['board_states'][index_white][i][0]:
-                piece_count = piece_count + 1
-        development = 1 - piece_count / 3
-        
-    return (earliness, side_white, side_relative, artificial_white, development)
+        index = int(len(game_dict['board_states']) / 2)
+    return index
+
+## Helper function to return the index of halfway through the midgame
+## Same I/O as mid_earlygame
+## If we didn't reach the midgame at all, returns None (so that list[:index] takes a slice to the end)
+def mid_midgame(game_dict):
+    if game_dict['end_game_index']:
+        # If we got to the end game
+        index = int((game_dict['middle_game_index'] + game_dict['end_game_index'])/2)
+    elif game_dict['middle_game_index']:
+        # If we got to the mid game but not the end game
+        index = int((game_dict['middle_game_index'] + len(game_dict['board_states']))/2)
+    else:
+        # If we didn't get to the mid game
+        index = None
+    return index
+
 
 ## Helper function to find castles
 ## Pass it the game_dict and a boolean for which player to check: True = white, False = black
@@ -423,7 +364,8 @@ def white_castling(game_dict):
 ## artificial : 1 if the castle was artificial, 0 otherwise
 ##
 ## An artificial castle will be:
-## - Any time through the mid game
+## - Measured half way through the mid game
+##    - Since the king moving out of the back row to artificial castle could trigger the start of the mid game
 ## - King not on the d/e files
 ## - King on the back rank
 ## - King to the left/right of all its rooks
@@ -433,10 +375,10 @@ def castle_index(game_dict,player):
     # Find out if they did a real castle, which side, and which turn
     castled = False
     if player:
-        key = 'white_moves'
+        moves_key = 'white_moves'
     else:
-        key = 'black_moves'
-    for move in game_dict[key]:
+        moves_key = 'black_moves'
+    for move in game_dict[moves_key]:
         if move['special'] == 'O-O':
             # King side
             castled = True
@@ -450,22 +392,22 @@ def castle_index(game_dict,player):
         if castled:
             return index, side, 0
     
-    # If we got here, we didn't do a real castle. So, check for artificial castling:            
-    # We'll look for artificial castling up to the end game, or the whole game if we never reach the end game
-    # Get the locations of their pieces the turns they move
-    if game_dict['end_game_index']:
-        # If we got to the end game
-        max_index = game_dict['end_game_index']
-        if player:
-            pieces = game_dict['white_pieces'][:max_index:2]
-        else:
-            pieces = game_dict['black_pieces'][1:max_index:2]
+    # If we got here, we didn't do a real castle. So, check for artificial castling
+    # First I'll get a list of the board positions at the end of our moves
+    
+    # If we're looking at white, our moves start at the 0th board state; at 1st for black
+    if player:
+        start_index = 0
+        pieces_key = 'white_pieces'
     else:
-        # If we didn't get to the end game
-        if player:
-            pieces = game_dict['white_pieces'][::2]
-        else:
-            pieces = game_dict['black_pieces'][1::2]
+        start_index = 1
+        pieces_key = 'black_pieces'
+    
+    # Next figure out the index of halfway through the mid game, or some other time if we didn't reach end/mid game
+    end_index = mid_midgame(game_dict)
+    
+    # Now we can get the board states at the end of our moves
+    pieces = game_dict[pieces_key][start_index:end_index:2]
 
     # Specifically, the king and rooks
     king_positions = [move['K'] for move in pieces]
@@ -498,11 +440,384 @@ def castle_index(game_dict,player):
     
     # If we artificial castled, return that
     if index:
-        index = game_dict[key][i]['move_number']
+        index = game_dict[moves_key][i]['move_number']
         return index, side, 1
     # Otherwise, no castle of any sort
     else:
-        return None, 0, 0      
+        return None, 0, 0
+
+
+### Helper function for recognizing pawn chains
+### Input: list of the pawns (already skewed) and j for the diagonal offset
+### Output: number of length >=3 pawn chains, and length of longest pawn chain
+def chain_helper(skewed_pawns, j):
+    files = [pawn[0] for pawn in skewed_pawns if pawn[1] == j]
+    
+    chain_length = 0
+    prev_file = -1
+    count = 0
+    longest_chain = 0
+    
+    # For each file of pawns on this diagonal, check if it extends the previous pawn chain
+    for i in files:
+        if i == prev_file + 1:
+            chain_length = chain_length + 1
+            # Since it does extend the previous chain, check if we hit length 3 or beat the max
+            if chain_length == 3:
+                count = count + 1
+            if chain_length > longest_chain:
+                longest_chain = chain_length
+        else:
+            # Otherwise, we broke the chain so start a new one
+            chain_length = 1
+        
+        # Regardless of what happend, set this so that we know what file we just added to the chain
+        prev_file = i
+    
+    return count, longest_chain
+
+
+        
+########################################
+### Features
+########################################
+
+
+## Outputs a list [A,B,C,D,A#,B#,C#,D#,E#,side] where
+## A,B,C,D : one-hots for ECO codes (omit E)
+## A#,B#,C#,D#,E# : interaction terms, the one-hot times the number of the opening
+## side : Float in [-1,1] i.e. Queen to King for white's preferred side to develop onto
+##       Measures this by finding the center of mass of certain squares at the mid early game
+##       The squares I'll consider are those that don't have the same piece that they started with
+def white_development(game_dict):
+    # I'll include a one-hot for E at first, remove it later
+    output = np.zeros(11)
+    
+    # Opening info from the dict
+    letter = game_dict['opening'][0]
+    number = int(game_dict['opening'][1:])
+    
+    # Set one-hots
+    output[ord(letter.upper())-65] = 1
+    
+    # Set interaction terms
+    for i in range(5):
+        output[i+5] = output[i] * number
+    
+    # Remove the one-hot for E
+    output = np.delete(output,4)
+    
+    # Index of halfway through the early game
+    index = mid_earlygame(game_dict)
+        
+    # Find the pieces moved at that index
+    pieces = [row[:2] for row in game_dict['board_states'][index]]
+    starting_board = [['R', 'P'], ['N', 'P'], ['B', 'P'], ['Q', 'P'], ['K', 'P'], ['B', 'P'], ['N', 'P'], ['R', 'P']]
+    pieces_moved = 0
+    weight = 0
+    for i in range(8):
+        for j in range(2):
+            if pieces[i][j] != starting_board[i][j]:
+                pieces_moved = pieces_moved + 1
+                weight = weight + i
+    output[-1] = (weight / pieces_moved) / 3.5 - 1
+    
+    return output
+
+## Outputs a list [earliness, side, side_relative, artificial, development] where
+## earliness : float in [0,1], 1/(the turn they castled), 0 if no castle
+## side : +1 for king side, -1 for queen side, 0 for no castle
+## side_relative : +1 for same side as opponent, -1 for opposite side, 0 if one of them didn't castle
+## artificial : 0 if bonafide castle, 1 if artificial
+## development : float in [0,1] for how empty the back rank opposite their castling side is
+##               calculated as 1 - (# pieces there) / 3, 0 if no castling
+## So if white castles and they developed their queen side N and B but the R is still there, then development = 0.66
+def white_castling(game_dict):
+    
+    # Call helper function to check who castled, which side, and when
+    index_white, side_white, artificial_white = castle_index(game_dict,True)
+    index_black, side_black, artificial_black = castle_index(game_dict,False)
+    
+    # Set the earliness
+    if index_white:
+        earliness = 1 / index_white
+    else:
+        earliness = 0
+        
+    # Set the relative side
+    side_relative = side_white * side_black
+    
+    # Set the development
+    if side_white == 0: # No castle
+        development = 0
+    elif side_white == 1: # King side castle, count number of pieces in a1,b1,c1
+        piece_count = 0
+        # For x indices 0, 1, 2
+        for i in range(3):
+            # Check if there is a piece in square (i,0) at the time of the castle
+            if game_dict['board_states'][index_white][i][0]:
+                piece_count = piece_count + 1
+        development = 1- piece_count / 3
+    else: # Queen side castle, count number of pieces in f1,g1,h1
+        piece_count = 0
+        # For x indices 5, 6, 7
+        for i in range(5,8):
+            # Check if there is a piece in square (i,0) at the time of the castle
+            if game_dict['board_states'][index_white][i][0]:
+                piece_count = piece_count + 1
+        development = 1 - piece_count / 3
+        
+    return [earliness, side_white, side_relative, artificial_white, development]
+
+
+### Outputs a list
+### [king_protection, center_strength, doubled, isolated, backward, color
+###    forwardness, guarded_forwardness, en_passant, storming, chain_count, longest_chain]
+### where
+### king_protection : weighted sum of distance of some of my pawns to my king, measured at half midgame
+### center_strength : weighted sum of how central guarded pawns are, averaged over midgame
+### doubled : average number of doubled pawns throughout midgame. 3 pawns on a file = 2 doubled pawns.
+### isolated : similar to previous. 2 pawns on an isolated file = 2 isolated pawns.
+### backward : similar to previous. 2 pawns on a file, both behind the neighboring pawns, = 2 backward pawns.
+### color : float in [-1,1] for average color of my pawn squares at start of endgame (+1 all white, -1 all black)
+### forwardness : average rank of my pawns, averaged over the midgame
+### guarded_forwardness : sum of ranks of guarded pawns on rank >=4 (index >= 3), -3 for each one, averaged over the midgame
+###                       the point of the -3 is so that rank 4 is worth 0 points, rank 5 is worth 1, etc.
+### en_passant : float in [0,1], fraction of midgame pawn moves that are en passant
+### storming : average of 1 / (distance of my pawns to opponent king), averaged over midgame
+###            the rationale for the reciprocal is that if I have no pawns, 0 indicates there are 'infinity far' from the king
+###            and also, having pawns that are 6 vs 7 squares from the opponent king is pretty similar
+### chain_count : average over midgame of number of len >= 3 pawn chains
+### longest_chain : average over midgame of length of longest pawn chain
+def white_pawns(game_dict):
+    # First get all the relevant indices for board_states
+    midgame_index = game_dict['middle_game_index']
+    mid_midgame_index = mid_midgame(game_dict)
+    endgame_index = game_dict['end_game_index']
+    
+    # If any of these are None then that could mess with computations
+    # So replace None with the maximum index
+    max_index = len(game_dict['board_states']) - 1
+    if midgame_index == None:
+        midgame_index = max_index
+    if mid_midgame_index == None:
+        mid_midgame_index = max_index
+    if endgame_index == None:
+        endgame_index = max_index
+        
+    # Lastly, if the midgame was 0 turns long then dividing over the length of the midgame (0) will give an error; so, a fix:
+    midgame_length = endgame_index - midgame_index
+    if midgame_length == 0:
+        midgame_length = 1
+    
+    # I'll use this a few times throughout
+    # List (len = midgame length) of lists of pawn locations
+    my_pawns_locations = [d['P'] for d in game_dict['white_pieces'][midgame_index : endgame_index]]
+    
+    ## King protection
+    # Only consider pawns within 2 horizontally and 3 vertically from our king
+    # Pawns within 1 horizontally from king get weight 1
+    # Pawns 2 horizontally from king get weight 0.5
+    # When P is n units from K vertically, I'll assign some float [0,1] of 'protection' it gives to K
+    king = game_dict['white_pieces'][mid_midgame_index]['K'][0]
+    pawns = game_dict['white_pieces'][mid_midgame_index]['P']
+    king_protection = 0
+    for pawn in pawns:
+        m = abs(pawn[0]-king[0])
+        n = abs(pawn[1]-king[1])
+        # Check we're not too far from the king
+        if (m > 2) | (n > 3): continue
+        # Assign weight to the pawn
+        protection = 0
+        if n == 1:
+            protection = 1
+        elif n == 2:
+            protection = 0.8
+        elif n == 3:
+            protection = 0.4
+        # If it's 2 horitontally from the king,
+        if m == 2:
+            protection = protection / 2
+        king_protection = king_protection + protection
+    
+    ## Center strength
+    center_strength = 0
+    for i in range(midgame_index,endgame_index):
+        FEN = game_dict['board_states_FEN'][i]
+        for pawn in my_pawns_locations[i-midgame_index]:
+            x = pawn[0]
+            y = pawn[1]
+            # Only look at c,d,e,f file pawns that are guarded
+            if (x > 1) & (x < 6) & (len(is_guarded(pawn,FEN)) > 0):
+                # The center presence of the pawn is 1 / (its Euclidean distance to the center of the board)
+                center_strength = center_strength + 1 / np.sqrt((x-3.5)**2 + (y-3.5)**2)
+    center_strength = center_strength / midgame_length
+    
+    
+    ## Doubled, isolated, backward pawns
+    doubled = 0
+    isolated = 0
+    backward = 0
+    for pawns in my_pawns_locations:
+        # If we're out of pawns, stop computing
+        if len(pawns) == 0: break
+            
+        # Reformat our list of tuples as a list of pawn ranks on each file
+        file_rank = [[pawn[1] for pawn in pawns if pawn[0] == file] for file in range(8)]
+        # For each file, check
+        # 1. How many pawns are on it? If 0, skip the next steps.
+        # 2. Are there pawns on adjacent files? If 0, skip the next step.
+        # 3. How many of the pawns are behind their neighbor(s)?
+        for i in range(8):
+            # Get lists for the ranks of pawns on our file and adjacent files
+            center = file_rank[i]
+            
+            if i == 0:
+                left = []
+            else:
+                left = file_rank[i-1]
+                
+            if i == 7:
+                right = []
+            else:
+                right = file_rank[i+1]
+            
+            # 1
+            count = len(center)
+            if count == 0: continue
+            if count > 1: doubled = doubled + count - 1
+                
+            # 2
+            if (len(left) == 0) & (len(right) == 0):
+                isolated = isolated + count
+                continue
+            
+            # 3
+            # Since the lists of pawns next to us may be empty, have to be careful about using min()
+            if len(left) == 0:
+                min_left = 8
+            else:
+                min_left = min(left)
+                
+            if len(right) == 0:
+                min_right = 8
+            else:
+                min_right = min(right)
+                
+            min_neighbor_rank = min(min_left,min_right)
+            
+            for rank in center:
+                if rank < min_neighbor_rank:
+                    backward = backward + 1
+                    
+    doubled = doubled / midgame_length
+    isolated = isolated / midgame_length
+    backward = backward / midgame_length
+    
+    ## Color
+    #color : float in [-1,1] for average color of my pawn squares at start of endgame (+1 all white, -1 all black)
+    pawns = game_dict['white_pieces'][endgame_index]['P']
+    # If the sum of the coords is even it is dark square, if it is odd it is light square
+    # So this next array has 1 for light square, 0 for dark square; the mean is the fraction light square
+    color = np.mean([(pawn[0] + pawn[1]) % 2 for pawn in pawns])
+    
+    # Next, scale so that it is in the range [-1,1], 0 if there were no pawns
+    if np.isnan(color):
+        color = 0
+    else:
+        color = (color * 2) - 1
+    
+    
+    ## Forwardness and guarded_forwardness
+    forwardness = 0
+    guarded_forwardness = 0
+    
+    for pawns in my_pawns_locations:
+        # If we're out of pawns, stop computing
+        if len(pawns) == 0: break
+            
+        # Forwardness
+        forwardness = forwardness + np.mean([pawn[1] for pawn in pawns])
+        
+        # Find the ranks of the guarded forward pawns
+        FEN = game_dict['board_states_FEN'][i]
+        gf_pawns = [pawn[1] for pawn in pawns if ((pawn[1] > 3) & (len(is_guarded(pawn,FEN)) > 0))]
+        guarded_forwardness = guarded_forwardness + sum(gf_pawns) - len(gf_pawns) * 3
+    
+    forwardness = forwardness / midgame_length
+    guarded_forwardness = guarded_forwardness / midgame_length
+    
+    
+    ## En passant
+    # We have indices for board states, so the indices for white's moves will be (roughly) the same but divided by 2
+    # Almost issue: if midgame_index is the last index of board_states and is odd,
+    #  taking ceil() will give an index out of range for white_moves
+    # But in that case, endgame_index will also be that maximal value
+    # So ceil(midgame_index) > floor(endgame_index), thus there's no indexing issue because we get the empty list
+    moves = game_dict['white_moves'][int(np.ceil(midgame_index / 2)) : int(np.floor(endgame_index / 2))]
+    pawn_moves = [move for move in moves if move['piece'] == 'P']
+    en_passant_moves = [1 for move in pawn_moves if move['special'] == 'p']
+    en_passant = len(en_passant_moves) / max(len(pawn_moves),1)
+    
+    
+    ## Storming
+    # Avg of  sum of 1 / Euclidean distance of my pawns to their king
+    # Use the previously defined my_pawns_locations
+    their_king_locations = [d['K'][0] for d in game_dict['black_pieces'][midgame_index : endgame_index]]
+    storming = 0
+    for i in range(len(my_pawns_locations)):
+        pawns = my_pawns_locations[i]
+        if len(pawns) == 0: break
+        king = their_king_locations[i]
+        distances = [1 / (np.sqrt((pawn[0]-king[0])**2 + (pawn[1]-king[1])**2)) for pawn in pawns]
+        storming = storming + np.mean(distances)
+    storming = storming / midgame_length
+    
+    
+    ## Chains
+    # Average over midgame of the number of length >=3 pawn chains
+    # Avg over midgame of length of longest pawn chain
+    # (A pawn chain is pawns in a diagonal, including a single pawn diagonal and a 2 pawn diagonal)
+    
+    # Make two lists for checking for diagonals up to the right/left separately, by skewing the pawn positions
+    down_skew = [[ [pawn[0],pawn[1]-pawn[0]] for pawn in pawns] for pawns in my_pawns_locations]
+    up_skew = [[ [pawn[0],pawn[1]+pawn[0]] for pawn in pawns] for pawns in my_pawns_locations]
+    # Iterate over the (skewed) board positions, and find pawn chains
+    # In the skewed setting, a pawn chain is a list of pawn coords with the same y and no gaps in the x coords
+    # I think the easiest way to detect these is:
+    # 1. For each j, take the files of all pawns with y = j
+    # 2. Iterate through this list of files, keeping track of when we hit a length 3 chain and of what the longest chain is
+    # 3. Combine the results from both the up/down skews
+    
+    chain_count = 0
+    longest_chain = 0
+    
+    for k in range(len(down_skew)):
+        d_pawns = down_skew[k]
+        u_pawns = up_skew[k]
+        longest = 0
+        
+        # 1. Loop over all offsets of the diagonals
+        for j in range(-7,8):
+            # 2. Use the helper function
+            d_count, d_longest = chain_helper(d_pawns,j)
+            u_count, u_longest = chain_helper(u_pawns,j)
+            
+            # 3. part 1
+            chain_count = chain_count + (d_count + u_count)
+            longest = max(d_longest,u_longest,longest)
+        
+        # 3. part 2
+        longest_chain = longest_chain + longest
+    
+    chain_count = chain_count / midgame_length
+    longest_chain = longest_chain / midgame_length
+    
+    ### FIXME can assume games reach the midgame (not necc endgame)
+
+    return [king_protection, center_strength, doubled, isolated, backward, color,
+            forwardness, guarded_forwardness, en_passant, storming, chain_count, longest_chain]
+
 
 ### discovered_checks function
 ### INPUT: takes in a game dict
