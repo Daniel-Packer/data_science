@@ -16,6 +16,14 @@ import lichess.api
 import json
 
 ########################################
+### Gobal Variables
+########################################
+### Creates values for the pieces
+PIECE_VALUES = {'P':1, 'N':3, 'B':3, 'R':5, 'Q':9, 'K' :1000}
+
+
+
+########################################
 ### Getting data
 ########################################
 
@@ -317,11 +325,14 @@ def is_guarded(p_sq, board_state_FEN):
 	#converts the piece_square tuple to a chess.SQUARE
 	sq = chess.square(p_sq[0],p_sq[1])
 
+	#checks color of the piece
+	color = board.piece_at(sq).color
+
 	#creates a list for the pieces to return
 	guarding_pieces = []
 
-	#iterates through list of white pieces guarding and stores them in the list
-	for guarder_square in board.attackers(chess.WHITE, sq):
+	#iterates through list of same colored pieces guarding and stores them in the list
+	for guarder_square in board.attackers(color, sq):
 		guarding_pieces.append([chess.square_file(guarder_square), chess.square_rank(guarder_square)])	
 
 	return guarding_pieces
@@ -329,42 +340,103 @@ def is_guarded(p_sq, board_state_FEN):
 ### is_pinned function
 ### 
 ### INPUT: takes tuple of integers [file, rank] corresponding to position and FEN of the board
-### OUTPUT: boolean 1 if pinned, 2 if not pinned
-### EXCEPTIONS: if called when piece's color is in check, if not a piece on the square, or if it isn't the piece's turn to move
+### OUTPUT: boolean True if pinned
+### EXCEPTIONS: if not a piece on the square, or if it isn't the piece's turn to move
 
 def is_pinned(p_sq, board_state_FEN):
 	is_pinned_flag = False
 
-	#creates values for the pieces
-	values = {'P':0, 'N':3, 'B':3, 'R':5, 'Q':9}
-
-
 	#creates a baseboard object in python chess
 	board = chess.Board(board_state_FEN)
-
-	#check is in check
-	if board.is_check(): raise Exception("turn to move is in check")
 
 
 	#converts the piece_square tuple to a chess.SQUARE
 	sq = chess.square(p_sq[0],p_sq[1])
+	
+	#throws error if no piece at the place
+	piece = board.piece_at(sq)
+	if piece == None:
+		raise Exception("not a piece at this square")
 
 	# looks at the piece on the square
-	piece = board.piece_type_at(sq)
+	piece_type = piece.symbol().upper()
 	color = board.piece_at(sq).color
 	
 	#checks if correct color to move
 	if color != board.turn: raise Exception("not right turn to move")
 	
-	#throws error if no piece
-	if piece == None:
-		raise Exception("not a piece at this square")
+	
 	
 	#checks	if pinned to king
 	if board.is_pinned(color, sq): return True
       
 	 
-	#because not pinned, removing the piece is valid, so we will look at all the possible moves with the piece on the board, and then all 
+	#because not pinned, removing the piece is valid, so we will look at all the possible moves with the piece on the board, and then all the moves when the piece is off the board
+	#change the color of the move
+	board.turn = 1- color 
+	moves_before = [ move for move in board.pseudo_legal_moves]
+	count = 0 
+	board1 = board.copy()
+	board1.remove_piece_at(sq)
+	moves_after = [move for move in board1.pseudo_legal_moves]
+
+	# looks at the difference between the two sets
+	for move in moves_before:
+		if move in moves_after: moves_after.remove(move)
+
+	# looks at all the captures
+	for move in moves_after:
+		if board1.is_capture(move) == False:
+			moves_after.remove(move)
+
+	for move in moves_after:
+		if not board1.piece_at(move.to_square):
+			break
+		piece_attacked = board1.piece_at(move.to_square).symbol().upper()
+		#calculates if material is higher
+		if PIECE_VALUES[piece_attacked] > PIECE_VALUES[piece_type]: 
+			p_sq = [chess.square_file(move.to_square), chess.square_rank(move.to_square)]
+			if len(is_guarded(p_sq, board1.fen())) == 0 : return True
+			if PIECE_VALUES[piece_attacked] > PIECE_VALUES[board1.piece_at(move.from_square).symbol().upper()]: return True
+
+	return is_pinned_flag
+
+
+### gives_fork 
+### 
+### input: piece square (in format [file, rank]) and FEN
+### output: boolean: 1 if the piece gives a fork, and zero if not
+
+def gives_fork(piece, fen):
+	# creates board
+	board = chess.Board(fen)
+
+	# converts piece to square
+	square = chess.square(piece[0], piece[1])
+
+	# finds the piece on the square
+	piece_type = board.piece_at(square).symbol().upper()
+	color = board.piece_at(square).color
+
+	# gets list of attacks from the square
+	attack_squares = board.attacks(square)
+
+	#creates a counter of pieces of greater value or unguarded the piece attacks
+	attack_count = 0
+
+	for sq in attack_squares:
+		if board.piece_at(sq):
+			#checks that piece attacked is of opposite color
+			if color != board.piece_at(sq).color:
+				# checks if greater value or unguarded and if so adds 1 
+				if PIECE_VALUES[board.piece_at(sq).symbol().upper()] > PIECE_VALUES	[piece_type] or  len(is_guarded([chess.square_file(sq), chess.square_rank(sq)], fen))==0:
+					attack_count +=1
+
+	return attack_count > 1
+
+
+
+
 ########################################
 ### Features
 ########################################
@@ -661,3 +733,108 @@ def distribution_piece_moves(gameDict):
 		else: dict[piece] +=1/len(gameDict['white_moves'])
 	return dict
 
+### pins function
+### input: gameDict
+### output: Dictionary with keys "pin_chances", "pins_given", "time_pinned"
+### pin_chances : number of opportunites white had to put black in a pin
+### pins_given : number of turns white had black pinned
+### time_pinned : arrary of turns for continuous pins
+
+def pins(gameDict):
+	#creates a list of current pins
+	current_pins = {}	
+
+	#creates a list of total pin and length
+	total_pins = []
+
+	#counter for number of turns with black pinned
+	pins_given = 0
+
+	#counts number of times black is pinned
+	for i in range(0, len(gameDict["black_pieces"])):
+		if not i%2:
+			for pieces in gameDict["black_pieces"][i].values():
+				if len(pieces) == 0: break
+				for piece in pieces:
+					if is_pinned(piece, gameDict["board_states_FEN"][i]):
+						pins_given +=1
+	
+	#counts pins for white
+	for i in range(0, len(gameDict["white_pieces"])):
+		if i %2:
+			#removes any pieces which are not pinned
+			for piece_str in current_pins.copy().keys():
+				#converts to piece integer tuple
+				piece = [int(piece_str[1]), int(piece_str[4])]
+				if is_pinned(piece, gameDict["board_states_FEN"][i ]) == False:
+					total_pins.append(current_pins.pop(piece_str))
+			for pieces in gameDict["white_pieces"][i].values():
+				if len(pieces) == 0:break
+				for piece in pieces:	
+					if is_pinned(piece, gameDict["board_states_FEN"][i]):
+						if str(piece) in current_pins:
+							current_pins[str(piece)] +=1
+						else: current_pins[str(piece)] =1
+
+	#pops of all elements at the end
+	for key in current_pins.keys():
+		total_pins.append(current_pins.pop(key))
+	return {"pins_given":pins_given, "time_pinned":	total_pins}
+
+
+### forks
+### input: game dictionary
+### output: number of forks given
+
+def forks(gameDict):
+	fork_counter = 0
+
+	for i in range(len(gameDict['white_pieces'])):
+		if i %2:
+			for pieces in gameDict["white_pieces"][i].values():
+				if len(pieces) == 0: break
+				for piece in pieces:
+					if gives_fork(piece, gameDict["board_states_FEN"][i]):
+						fork_counter += 1
+					
+	return fork_counter
+
+
+### pieces_guarded
+### input: game dictionary
+### output: average (over the mid-game) of number of pieces guarding attacked pieces divided by the number of attacked pieces times the number of pieces for white
+
+def pieces_guarded(gameDict):
+	# counters for number of pieces attacked, number of pieces guarding, and number of pieces for white
+	pieces_attacked = []
+	pieces_guarding = []
+	pieces_white = []
+
+	# loops through moves in the midgame
+	for i in range(gameDict["middle_game_index"], gameDict["end_game_index"]):
+		# counter for number of white pieces
+		white_pieces_turn = 0
+		# finds all white pieces attacked by black and puts them in a list
+		board = chess.Board(gameDict["board_states_FEN"][i])
+		piece_attacked_turn = []
+		
+		for pieces in gameDict["white_pieces"][i].values():
+			for piece in pieces:
+				white_pieces_turn +=  1 
+				if board.is_attacked_by(chess.BLACK, chess.square(piece[0],piece[1])): piece_attacked_turn.append(piece)
+
+		# checks which white pieces are defending them (stored as a chess square)
+		piece_defending_turn = set()
+		
+		for piece in piece_attacked_turn:
+			for sq in board.attackers(chess.WHITE, chess.square(piece[0], piece[1])): 
+				piece_defending_turn.add(sq)
+
+		pieces_attacked.append(len(piece_attacked_turn))
+		pieces_guarding.append(len(piece_defending_turn))
+		pieces_white.append(white_pieces_turn)
+
+		p_a = np.array(pieces_attacked)		
+		p_g = np.array(pieces_guarding)
+		p_w = np.array(pieces_white)
+	return np.mean(p_a/(p_g * p_w)) / (gameDict["end_game_index"] - gameDict["middle_game_index"])
