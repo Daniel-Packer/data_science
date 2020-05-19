@@ -130,8 +130,8 @@ def get_gameDict(gamepgn):
 		current_move = current_board.parse_san(move)
 
 		#writes the to and from squares
-		move_dict["to"] = [(current_move.to_square % 8), (current_move.to_square // 8)  ]
-		move_dict["from"] = [(current_move.from_square % 8) , (current_move.from_square // 8)  ]
+		move_dict["to"] = [current_move.to_square % 8, current_move.to_square // 8]
+		move_dict["from"] = [current_move.from_square % 8 , current_move.from_square // 8]
 		#checks if there was en passant
 		if current_board.is_en_passant(current_move):
 			move_dict["special"] = "p"
@@ -354,6 +354,13 @@ def mid_midgame(game_dict):
         index = None
     return index
 
+## Helper function to cap an index at the last index of the game if it is None
+def cap_index(i, game_dict):
+    max_i = len(game_dict['board_states_FEN']) - 1
+    if i == None:
+        return max_i
+    else:
+        return i
 
 ## Helper function to find castles
 ## Pass it the game_dict and a boolean for which player to check: True = white, False = black
@@ -364,7 +371,7 @@ def mid_midgame(game_dict):
 ## artificial : 1 if the castle was artificial, 0 otherwise
 ##
 ## An artificial castle will be:
-## - Measured half way through the mid game
+## - Happened by half way through the mid game
 ##    - Since the king moving out of the back row to artificial castle could trigger the start of the mid game
 ## - King not on the d/e files
 ## - King on the back rank
@@ -683,13 +690,9 @@ def white_pawns(game_dict):
     
     # If any of these are None then that could mess with computations
     # So replace None with the maximum index
-    max_index = len(game_dict['board_states']) - 1
-    if midgame_index == None:
-        midgame_index = max_index
-    if mid_midgame_index == None:
-        mid_midgame_index = max_index
-    if endgame_index == None:
-        endgame_index = max_index
+    midgame_index = cap_index(midgame_index, game_dict)
+    mid_midgame_index = cap_index(midgame_index, game_dict)
+    endgame_index = cap_index(midgame_index, game_dict)
         
     # Lastly, if the midgame was 0 turns long then dividing over the length of the midgame (0) will give an error; so, a fix:
     midgame_length = endgame_index - midgame_index
@@ -898,12 +901,124 @@ def white_pawns(game_dict):
     
     chain_count = chain_count / midgame_length
     longest_chain = longest_chain / midgame_length
-    
-    ### FIXME can assume games reach the midgame (not necc endgame)
 
     return [king_protection, center_strength, doubled, isolated, backward, color,
             forwardness, guarded_forwardness, en_passant, storming, chain_count, longest_chain]
 
+
+### Outputs a list
+### [rank, density, attack, pawn_pref, minor_pref, rook_pref, queen_pref]
+### where
+### rank : average rank of white's pieces, averaged over the midgame
+### density : float in [0,1]. The density of a piece is (# adjacent squares occupied) / (# adjacent squares),
+###           so average that over all pieces and the midgame.
+### attack : # of squares attacked, averaged over the midgame
+### pawn_pref : float in [0,1], fraction of the pawns on the board that are white's, averaged over the midgame
+### minor_pref : similar to previous, counting both knights and bishops
+### rook_pref : similar to previous
+### queen_pref : similar to previous
+###
+### If the midgame has length 0, just take their value at the index of the midgame
+def white_board(game_dict):
+    # First get all the relevant indices for board_states
+    midgame_index = game_dict['middle_game_index']
+    endgame_index = game_dict['end_game_index']
+    midgame_index = cap_index(midgame_index, game_dict)
+    endgame_index = cap_index(endgame_index, game_dict)
+    
+    # In case there was no midgame, pretend there was a midgame of length 1
+    if endgame_index == midgame_index:
+        endgame_index = midgame_index + 1
+    
+    # For each board state, calculate the stats and add to the running totals
+    # At the end, take the averages
+    
+    output = np.zeros(7)
+    
+    for i in range(midgame_index,endgame_index):
+        # Things from the dictionary
+        white_pieces = game_dict['white_pieces'][i]
+        black_pieces = game_dict['black_pieces'][i]
+        board_object = chess.Board(game_dict['board_states_FEN'][i])
+
+        # Formats the dictionaries as lists of coordinates of spaces occupied
+        white_coordinates = [coords for piece in white_pieces.values() for coords in piece]
+        black_coordinates = [coords for piece in black_pieces.values() for coords in piece]
+
+        # Formats the coords as sets of numbers, where each number represents a square occupied
+        white_locations = set([chess.square(coords[0],coords[1]) for coords in white_coordinates])
+        black_locations = set([chess.square(coords[0],coords[1]) for coords in black_coordinates])
+        all_locations = set(white_locations | black_locations)
+        
+        ## Rank
+        rank = np.mean([coords[1] for coords in white_coordinates])
+        
+        ## Density
+        # This board of all kings makes it easy to determine the adjacent squares, since that would be the squares a king attacks
+        K = 'K'*8
+        adjacency_object = chess.Board((K+'/')*7+K)
+        
+        # Divide the number of pieces adjacent to our pieces by the number of squares adjacent to our pieces
+        adjacent_squares = white_locations
+        for loc in white_locations:
+            adjacent_squares = adjacent_squares | set([square for square in adjacency_object.attacks(loc)])
+        density = len(adjacent_squares & all_locations) / len(adjacent_squares)
+        
+        ## Density alt: first version I did
+        # I'll add up the density of each piece and take the average at the end
+        #density = 0
+        # For each white piece
+        #for loc in white_locations:
+        #    # Find its neighbors
+        #    adj_squares = set([square for square in adjacency_object.attacks(loc)])
+        #    
+        #    # Calculate its density
+        #    density = density + len(adj_squares & all_locations) / len(adj_squares)
+        #density = density / len(white_locations)
+        
+        ## Attack
+        # Some nice job security code
+        num_attacked = len(set([square for loc in white_locations for square in board_object.attacks(loc)]))
+        
+        ## Pref
+        
+        # Pawns
+        white = len(white_pieces['P'])
+        black = len(black_pieces['P'])
+        if white + black == 0:
+            pawn_pref = 0.5
+        else:
+            pawn_pref = white / (white+black)
+        
+        # Minors
+        white = len(white_pieces['N']) + len(white_pieces['B'])
+        black = len(black_pieces['N']) + len(black_pieces['B'])
+        if white + black == 0:
+            minor_pref = 0.5
+        else:
+            minor_pref = white / (white+black)
+        
+        # Rooks
+        white = len(white_pieces['R'])
+        black = len(black_pieces['R'])
+        if white + black == 0:
+            rook_pref = 0.5
+        else:
+            rook_pref = white / (white+black)
+        
+        # Queens
+        white = len(white_pieces['Q'])
+        black = len(black_pieces['Q'])
+        if white + black == 0:
+            queen_pref = 0.5
+        else:
+            queen_pref = white / (white+black)
+        
+        # Add to our running totals for the output
+        output = output + [rank,density,num_attacked,pawn_pref,minor_pref,rook_pref,queen_pref]
+    
+    output = output / (endgame_index - midgame_index)
+    return output
 
 ### discovered_checks function
 ### INPUT: takes in a game dict
