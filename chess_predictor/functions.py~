@@ -476,64 +476,6 @@ def chain_helper(skewed_pawns, j):
     
     return count, longest_chain
 
-
-        
-########################################
-### Features
-########################################
-
-### Knight Features function, will return a list of the form [Knight pair, knight outposts, knight repositioning, number of squares controlled].
-def knight_features(game_dict):
-    ## I try to do my best to only consider the player generally, so that if we later want to implement this for the black player too, we simply change player to be an input
-    player = 'white'
-    ## Initalize the features to be returned:
-    knight_pair = 0
-    knight_outpost_turns = 0
-    knight_repo_counter = 0
-    knight_attack_counter = 0
-    
-    ## Check whether when there are only two minor pieces in play, those pieces are knights.
-    if (len(game_dict['white_pieces'][two_minor_pieces_turns(game_dict)[0]]['N']) == 2):
-        knight_pair = 1
-    
-    ## The following will iterate through midgame turns to check each board state for various features:
-    # First check that we make it to the middle game:
-    end_game_index = 0 ## This line shouldn't be necessary, just here in case we somehow get to the second if without hitting the first
-    if (game_dict['end_game_index'] == None):
-        end_game_index = int(len(game_dict['board_states']) - 1)
-        ## In case the game ends before the endgame, this sets the endgame to be the last move in the game.
-    else:
-        end_game_index = game_dict['end_game_index']
-
-    if (not (game_dict['middle_game_index'] == None)):
-        for turn in range(int(game_dict['middle_game_index']/2), int(end_game_index/2)):
-            ## The knight outpost code has been shunted off to the detect_outpost code below:
-            knight_outpost_turns += detect_outpost(game_dict, turn, player)
-
-            ## The following counts the knight repositioning
-            if (game_dict[player+'_moves'][turn]['piece'] == 'N'): 
-                ## the above checks if the player moved a knight this turn, then:
-                for move in game_dict[player+'_moves']:
-                    ## sums over all other knight moves in the game, scaling by distance
-                    if ((move['piece'] == 'N') and (move['move_number']/2 != turn)):
-                        knight_repo_counter += 1 / abs(move['move_number']/2 - turn)
-
-            ## Now, we count the number of squares attacked by the knights at a given turn:
-            # We get the FEN for white: (remove the +1 to get the FEN for black)
-            board = chess.Board(game_dict['board_states_FEN'][turn*2+1])
-            # We then check every legal move to see if the piece that can be moved is a knight, if so, we add one to the move counter. To change this to work for black, we need to make the 'N' lowercase or apply .toUpper() both so that we don't need the strings to match case
-            for move in board.legal_moves:
-                if (str(board.piece_at(move.from_square)) == 'N'):
-                    knight_attack_counter += 1
-    
-        ## Scale the repositioning and attack counters by the total number of moves in the mid-game, so longer mid-games don't get overbiased.
-        knight_repo_counter = knight_repo_counter / (end_game_index - game_dict['middle_game_index'])
-        knight_attack_counter = knight_attack_counter / (end_game_index - game_dict['middle_game_index']) 
-
-
-    return knight_pair, knight_outpost_turns, knight_repo_counter, knight_attack_counter
-
-
 ## The following detects a knight outpost in a specific turn for a player inputted as either 'white' or 'black'
 def detect_outpost(game_dict, turn, player):
     board = game_dict['board_states'][turn]
@@ -568,6 +510,164 @@ def detect_outpost(game_dict, turn, player):
             if (potential_attackers == 0):
                 outpost_counter += 1
     return outpost_counter
+
+
+        
+########################################
+### Features
+########################################
+
+### Knight Features function, will return a list of the form [Knight pair, knight outposts, knight repositioning, number of squares controlled].
+def knight_features(game_dict):
+    ## I try to do my best to only consider the player generally, so that if we later want to implement this for the black player too, we simply change player to be an input
+    player = 'white'
+    ## Initalize the features to be returned:
+    knight_pair = 0
+    knight_outpost_turns = 0
+    knight_repo_counter = 0
+    knight_attack_counter = 0
+    num_knights = 0
+
+
+    ## Check whether when there are only two minor pieces in play, those pieces are knights.
+    if ((len(game_dict['white_pieces'][two_minor_pieces_turns(game_dict)[0]]['N']) == 2) and (two_minor_pieces_turns(game_dict)[0] != -1)):
+        knight_pair = 1
+    
+    ## The following will iterate through midgame turns to check each board state for various features:
+    # First check that we make it to the middle game:
+    end_game_index = 0 ## This line shouldn't be necessary, just here in case we somehow get to the second if without hitting the first
+    if (game_dict['end_game_index'] == None):
+        end_game_index = int(len(game_dict['board_states']) - 1)
+        ## In case the game ends before the endgame, this sets the endgame to be the last move in the game.
+    else:
+        end_game_index = game_dict['end_game_index']
+
+    if (not (game_dict['middle_game_index'] == None)):
+        for turn in range(int(game_dict['middle_game_index']/2), int(end_game_index/2)):
+        ## turn iterates over white's moves ( game_dict['white_moves'] ) particularly, so to get the associated board states, we multiply turn by 2
+            white_half_turn = turn*2 + 1
+            num_knights = len(game_dict['white_pieces'][white_half_turn]['N'])
+            ## The knight outpost code has been shunted off to the detect_outpost code below:
+            knight_outpost_turns += detect_outpost(game_dict, white_half_turn, player)
+
+            ## The following counts the knight repositioning
+            if (game_dict[player+'_moves'][turn]['piece'] == 'N'): 
+                ## the above checks if the player moved a knight this turn, then:
+                for move in game_dict[player+'_moves']:
+                    ## sums over all other knight moves in the game, scaling by distance
+                    if ((move['piece'] == 'N') and (move['move_number']/2 != turn)):
+                        knight_repo_counter += 1 / abs(move['move_number']/2 - turn)
+
+            ## Now, we count the number of squares attacked by the knights at a given turn:
+            # We get the FEN for white: (remove the +1 to get the FEN for black)
+            board = chess.Board(game_dict['board_states_FEN'][white_half_turn])
+            # We then check every legal move to see if the piece that can be moved is a knight, if so, we add one to the move counter. To change this to work for black, we need to make the 'N' lowercase or apply .toUpper() both so that we don't need the strings to match case
+            for move in board.legal_moves:
+                if (str(board.piece_at(move.from_square)).upper() == 'N'):
+                    knight_attack_counter += 1 / num_knights
+    
+        ## Scale the repositioning, attack, and outpost counters by the total number of moves in the mid-game, so longer mid-games don't get overbiased.
+        knight_outpost_turns = knight_outpost_turns / (end_game_index - game_dict['middle_game_index'])
+
+        knight_repo_counter = knight_repo_counter / (end_game_index - game_dict['middle_game_index'])
+        knight_attack_counter = knight_attack_counter / (end_game_index - game_dict['middle_game_index']) 
+
+
+    return knight_pair, knight_outpost_turns, knight_repo_counter, knight_attack_counter
+
+## Bishop Features are:
+# Bishop Pair (1 for yes, 0 for no)
+# King side Fianchetto
+# Queen side Fianchetto
+# Number of Squares controlled (sum/turns) of controlled squares by bishops in the middle game
+# Opp color bishop (1 if yes, -1 if no, 0 if there is never one bishop for each player)
+# Bishop_pawns: once white has only one bishop, adds +1 for each pawn on the opposite color, -1 for each on the same color of the opponents. Averages over number of turns that white has only one bishop
+# Taking long diagonals (number of midgame turns in which a bishop is on a long diagonal/total number of midgame turns.
+
+
+def bishop_features(game_dict):
+    ## I try to do my best to only consider the player generally, so that if we later want to implement this for the black player too, we simply change player to be an input
+    player = 'white'
+    ## Initalize the features to be returned:
+    bishop_pair = 0
+    k_side_fianchetto = 0
+    q_side_fianchetto = 0
+    bishop_attack_counter = 0
+    bishop_pawns = 0
+    one_bishop_turn_counter = 0
+    opp_color = 0
+    long_diag_turns = 0
+    long_diag_squares = [0, 9, 18, 27, 36, 45, 54, 63, 7, 14, 21, 28, 35, 42, 49, 56]
+    
+    ## Check whether when there are only two minor pieces in play, those pieces are bishops.
+    if ((len(game_dict['white_pieces'][two_minor_pieces_turns(game_dict)[0]]['B']) == 2) and (two_minor_pieces_turns(game_dict)[0] != -1)):
+        bishop_pair = 1
+    for i in range(len(game_dict['board_states'])):
+        board_state = game_dict['board_states'][i]
+
+        white_pieces, black_pieces = get_piece_locations(board_state)
+        if ((opp_color == 0) and ((len(white_pieces['B']) == 1) and (len(black_pieces['B']) == 1))):
+            if ( (sum(white_pieces['B'][0]) % 2) == (sum(black_pieces['B'][0]) % 2)):
+                opp_color = -1
+            else:
+                opp_color = 1
+        
+        if (len(white_pieces['B']) == 1):
+            one_bishop_turn_counter += 1
+            white_parity = sum(white_pieces['B'][0]) % 2
+            for j in range(len(black_pieces['P'])):
+                if (sum(black_pieces['P'][j]) % 2 == white_parity):
+                    bishop_pawns += -1
+                else:
+                    bishop_pawns += 1
+    if (one_bishop_turn_counter != 0):
+        bishop_pawns = bishop_pawns / one_bishop_turn_counter
+
+
+    ## The following will iterate through game turns to check each board state for various features (which may be present in various parts of the game):
+    # First check that we make it to the middle game:
+    if (game_dict['end_game_index'] == None):
+        end_game_index = int(len(game_dict['board_states']) - 1)
+        ## In case the game ends before the endgame, this sets the endgame to be the last move in the game. Otherwise, the end_game_index is what it should be
+    else:
+        end_game_index = game_dict['end_game_index']
+
+    if (not (game_dict['middle_game_index'] == None)):
+        ## Early game features tested here:
+        for turn in range(int(game_dict['middle_game_index']/2)):
+            white_half_turn = turn * 2
+            
+            board = chess.Board(game_dict['board_states_FEN'][white_half_turn])
+            ## Check for fianchettos
+            if (str(board.piece_at(9)).upper() == 'B'):
+                k_side_fianchetto = 1
+            if (str(board.piece_at(14)).upper() == 'B'):
+                q_side_fianchetto = 1
+
+
+        ## Middle game features tested here:
+        for turn in range(int(game_dict['middle_game_index']/2), int(end_game_index/2)):
+        ## turn iterates over white's moves ( game_dict['white_moves'] ) particularly, so to get the associated board states, we multiply turn by 2
+            white_half_turn = turn*2 + 1
+            num_bishops = len(game_dict['white_pieces'][white_half_turn]['B'])
+
+            ## Now, we count the number of squares attacked by the bishop at a given turn:
+            # We get the FEN for white: (remove the +1 to get the FEN for black)
+            board = chess.Board(game_dict['board_states_FEN'][white_half_turn])
+            # We then check every legal move to see if the piece that can be moved is a bishop, if so, we add one to the move counter. To change this to work for black, we need to make the 'N' lowercase or apply .upper() both so that we don't need the strings to match case
+            for move in board.legal_moves:
+                if (str(board.piece_at(move.from_square)).upper() == 'B'):
+                    bishop_attack_counter += 1 / num_bishops
+
+            for square in long_diag_squares:
+                if (str(board.piece_at(square)) == 'B'):
+                    long_diag_turns += 1/num_bishops
+        ## Scale the attack and long_diag counters by the total number of moves in the mid-game, so longer mid-games don't get overbiased.
+        bishop_attack_counter = bishop_attack_counter / abs(end_game_index - game_dict['middle_game_index'])
+        long_diag_turns = 2 * long_diag_turns / abs(end_game_index - game_dict['middle_game_index']) ## The 2 * is so that a score of one would be all bishops on their long diagonals for the entire midgame, since we are dividing by the total number of half-turns, while the counted turns are only those of white
+
+    return bishop_pair, k_side_fianchetto, q_side_fianchetto, bishop_attack_counter, long_diag_turns, opp_color, bishop_pawns
+
 
 ## Outputs a list [A,B,C,D,A#,B#,C#,D#,E#,side] where
 ## A,B,C,D : one-hots for ECO codes (omit E)
