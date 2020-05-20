@@ -576,12 +576,13 @@ def knight_features(game_dict):
     return knight_pair, knight_outpost_turns, knight_repo_counter, knight_attack_counter
 
 
-## Outputs a list [A,B,C,D,A#,B#,C#,D#,E#,side] where
-## A,B,C,D : one-hots for ECO codes (omit E)
-## A#,B#,C#,D#,E# : interaction terms, the one-hot times the number of the opening
-## side : Float in [-1,1] i.e. Queen to King for white's preferred side to develop onto
-##       Measures this by finding the center of mass of certain squares at the mid early game
-##       The squares I'll consider are those that don't have the same piece that they started with
+### White development
+### Outputs a list [A,B,C,D,A#,B#,C#,D#,E#,side] where
+### A,B,C,D : one-hots for ECO codes (omit E)
+### A#,B#,C#,D#,E# : interaction terms, the one-hot times the number of the opening
+### side : Float in [-1,1] i.e. Queen to King for white's preferred side to develop onto
+###       Measures this by finding the center of mass of certain squares at the mid early game
+###       The squares I'll consider are those that don't have the same piece that they started with
 def white_development(game_dict):
     # I'll include a one-hot for E at first, remove it later
     output = np.zeros(11)
@@ -617,14 +618,15 @@ def white_development(game_dict):
     
     return output
 
-## Outputs a list [earliness, side, side_relative, artificial, development] where
-## earliness : float in [0,1], 1/(the turn they castled), 0 if no castle
-## side : +1 for king side, -1 for queen side, 0 for no castle
-## side_relative : +1 for same side as opponent, -1 for opposite side, 0 if one of them didn't castle
-## artificial : 0 if bonafide castle, 1 if artificial
-## development : float in [0,1] for how empty the back rank opposite their castling side is
-##               calculated as 1 - (# pieces there) / 3, 0 if no castling
-## So if white castles and they developed their queen side N and B but the R is still there, then development = 0.66
+### White castling
+### Outputs a list [earliness, side, side_relative, artificial, development] where
+### earliness : float in [0,1], 1/(the turn they castled), 0 if no castle
+### side : +1 for king side, -1 for queen side, 0 for no castle
+### side_relative : +1 for same side as opponent, -1 for opposite side, 0 if one of them didn't castle
+### artificial : 0 if bonafide castle, 1 if artificial
+### development : float in [0,1] for how empty the back rank opposite their castling side is
+###               calculated as 1 - (# pieces there) / 3, 0 if no castling
+### So if white castles and they developed their queen side N and B but the R is still there, then development = 0.66
 def white_castling(game_dict):
     
     # Call helper function to check who castled, which side, and when
@@ -663,6 +665,7 @@ def white_castling(game_dict):
     return [earliness, side_white, side_relative, artificial_white, development]
 
 
+### White pawns
 ### Outputs a list
 ### [king_protection, center_strength, doubled, isolated, backward, color
 ###    forwardness, guarded_forwardness, en_passant, storming, chain_count, longest_chain]
@@ -906,6 +909,7 @@ def white_pawns(game_dict):
             forwardness, guarded_forwardness, en_passant, storming, chain_count, longest_chain]
 
 
+### White board
 ### Outputs a list
 ### [rank, density, attack, pawn_pref, minor_pref, rook_pref, queen_pref]
 ### where
@@ -1018,7 +1022,63 @@ def white_board(game_dict):
         output = output + [rank,density,num_attacked,pawn_pref,minor_pref,rook_pref,queen_pref]
     
     output = output / (endgame_index - midgame_index)
-    return output
+    return list(output)
+
+### White clusters
+### Outputs a list
+### [MLL, ML, MM, MR, MRR, BL, BM, BR]
+### where the abbreviations are for different rectangles of squares on the board, and their values are
+### white's fractional presence in the zones, averaged throughout the midgame
+### The zones are (given as ranks/files):
+### MLL : 45/a
+### ML : 45/bc
+### MM : 45/de
+### MR : 45/fg
+### MRR : 45/h
+### BL : 3/abc
+### BM : 3/de
+### BR : 3/fgh
+###
+### If the midgame had length 0, just calculate this at the turn of the midgame
+def white_clusters(game_dict):
+    ## Lots of this is similar to white_board
+    
+    # First get all the relevant indices for board_states
+    midgame_index = game_dict['middle_game_index']
+    endgame_index = game_dict['end_game_index']
+    midgame_index = cap_index(midgame_index, game_dict)
+    endgame_index = cap_index(endgame_index, game_dict)
+    
+    # In case there was no midgame, pretend there was a midgame of length 1
+    if endgame_index == midgame_index:
+        endgame_index = midgame_index + 1
+        
+    # Create sets to represent the square clusters
+    MLL_mask = set(chess.SquareSet((chess.BB_RANK_4 | chess.BB_RANK_5) & chess.BB_FILE_A))
+    ML_mask  = set(chess.SquareSet((chess.BB_RANK_4 | chess.BB_RANK_5) & (chess.BB_FILE_B | chess.BB_FILE_C)))
+    MM_mask  = set(chess.SquareSet((chess.BB_RANK_4 | chess.BB_RANK_5) & (chess.BB_FILE_D | chess.BB_FILE_E)))
+    MR_mask  = set(chess.SquareSet((chess.BB_RANK_4 | chess.BB_RANK_5) & (chess.BB_FILE_F | chess.BB_FILE_G)))
+    MRR_mask = set(chess.SquareSet((chess.BB_RANK_4 | chess.BB_RANK_5) & chess.BB_FILE_H))
+    BL_mask  = set(chess.SquareSet(chess.BB_RANK_3 & (chess.BB_FILE_A | chess.BB_FILE_B | chess.BB_FILE_C)))
+    BM_mask  = set(chess.SquareSet(chess.BB_RANK_3 & (chess.BB_FILE_D | chess.BB_FILE_E)))
+    BR_mask  = set(chess.SquareSet(chess.BB_RANK_3 & (chess.BB_FILE_F | chess.BB_FILE_G | chess.BB_FILE_H)))
+    masks = [MLL_mask,ML_mask,MM_mask,MR_mask,MRR_mask,BL_mask,BM_mask,BR_mask]
+    
+    output = np.zeros(8)
+    
+    for i in range(midgame_index,endgame_index):
+        # Things from the dictionary
+        white_pieces = game_dict['white_pieces'][i]
+
+        # Formats the dictionaries as sets of numbers, where each number represents a square occupied
+        white_locations = set([chess.square(coords[0],coords[1]) for piece in white_pieces.values() for coords in piece])
+        
+        # Updates the running total of our fractions
+        output = output + [len(mask & white_locations) / len(mask) for mask in masks]
+    # Average
+    output = output / (endgame_index - midgame_index)
+    
+    return list(output)
 
 ### discovered_checks function
 ### INPUT: takes in a game dict
