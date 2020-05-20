@@ -793,6 +793,52 @@ def bishop_features(game_dict):
 
     return bishop_pair, k_side_fianchetto, q_side_fianchetto, bishop_attack_counter, long_diag_turns, opp_color, bishop_pawns
 
+def minor(game_dict):
+    ## Various combined minor piece features:
+    nb_pref = 0
+    nb_develop = 0
+
+    pref_turns = 0
+    develop_turns = 0
+    fully_developed = False
+
+    ## Iterate through board states:
+    for i in range(len(game_dict['board_states'])):
+        board = game_dict['board_states'][i]
+        white_pieces, black_pieces = get_piece_locations(board)
+        
+
+        ## Count 'developed' minor pieces
+        if (not fully_developed):
+            develop_turns += 1
+            minor_pieces = []
+            for knight in white_pieces['N']:
+                minor_pieces.append(knight)
+                if knight[1] > 0:
+                    nb_develop += 1
+
+            for bishop in white_pieces['B']:
+                minor_pieces.append(bishop)
+                if bishop[1] > 0:
+                    nb_develop -= 1
+
+            developed = [(piece[1] > 0) for piece in minor_pieces]
+
+            fully_developed = all(developed)
+    
+        ## add +1 for each knight, -1 for each bishop in play for white, subtract those values for black 
+        # (if both players have the same number of minor pieces):
+        if ((len(white_pieces['N']) + len(white_pieces['B'])) == (len(black_pieces['B']) + len(black_pieces['N']))):
+            nb_pref += len(white_pieces['N']) - len(black_pieces['N'])
+            nb_pref -= len(white_pieces['B']) - len(black_pieces['B'])
+            pref_turns += 1
+
+    ## As always, we normalize by turns we are considering:
+
+    nb_pref = nb_pref / pref_turns
+    nb_develop = nb_develop / develop_turns 
+
+    return nb_pref, nb_develop
 
 ### White development
 ### Outputs a list [A,B,C,D,A#,B#,C#,D#,E#,side] where

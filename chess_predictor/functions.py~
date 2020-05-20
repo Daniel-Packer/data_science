@@ -16,6 +16,14 @@ import lichess.api
 import json
 
 ########################################
+### Gobal Variables
+########################################
+### Creates values for the pieces
+PIECE_VALUES = {'P':1, 'N':3, 'B':3, 'R':5, 'Q':9, 'K' :1000}
+
+
+
+########################################
 ### Getting data
 ########################################
 
@@ -130,8 +138,8 @@ def get_gameDict(gamepgn):
 		current_move = current_board.parse_san(move)
 
 		#writes the to and from squares
-		move_dict["to"] = [(current_move.to_square % 8), (current_move.to_square // 8)  ]
-		move_dict["from"] = [(current_move.from_square % 8) , (current_move.from_square // 8)  ]
+		move_dict["to"] = [current_move.to_square % 8, current_move.to_square // 8]
+		move_dict["from"] = [current_move.from_square % 8 , current_move.from_square // 8]
 		#checks if there was en passant
 		if current_board.is_en_passant(current_move):
 			move_dict["special"] = "p"
@@ -319,14 +327,116 @@ def is_guarded(p_sq, board_state_FEN):
 	#converts the piece_square tuple to a chess.SQUARE
 	sq = chess.square(p_sq[0],p_sq[1])
 
+	#checks color of the piece
+	color = board.piece_at(sq).color
+
 	#creates a list for the pieces to return
 	guarding_pieces = []
 
-	#iterates through list of white pieces guarding and stores them in the list
-	for guarder_square in board.attackers(chess.WHITE, sq):
+	#iterates through list of same colored pieces guarding and stores them in the list
+	for guarder_square in board.attackers(color, sq):
 		guarding_pieces.append([chess.square_file(guarder_square), chess.square_rank(guarder_square)])	
 
 	return guarding_pieces
+
+### is_pinned function
+### 
+### INPUT: takes tuple of integers [file, rank] corresponding to position and FEN of the board
+### OUTPUT: boolean True if pinned
+### EXCEPTIONS: if not a piece on the square, or if it isn't the piece's turn to move
+
+def is_pinned(p_sq, board_state_FEN):
+	is_pinned_flag = False
+
+	#creates a baseboard object in python chess
+	board = chess.Board(board_state_FEN)
+
+
+	#converts the piece_square tuple to a chess.SQUARE
+	sq = chess.square(p_sq[0],p_sq[1])
+	
+	#throws error if no piece at the place
+	piece = board.piece_at(sq)
+	if piece == None:
+		raise Exception("not a piece at this square")
+
+	# looks at the piece on the square
+	piece_type = piece.symbol().upper()
+	color = board.piece_at(sq).color
+	
+	#checks if correct color to move
+	if color != board.turn: raise Exception("not right turn to move")
+	
+	
+	
+	#checks	if pinned to king
+	if board.is_pinned(color, sq): return True
+      
+	 
+	#because not pinned, removing the piece is valid, so we will look at all the possible moves with the piece on the board, and then all the moves when the piece is off the board
+	#change the color of the move
+	board.turn = 1- color 
+	moves_before = [ move for move in board.pseudo_legal_moves]
+	count = 0 
+	board1 = board.copy()
+	board1.remove_piece_at(sq)
+	moves_after = [move for move in board1.pseudo_legal_moves]
+
+	# looks at the difference between the two sets
+	for move in moves_before:
+		if move in moves_after: moves_after.remove(move)
+
+	# looks at all the captures
+	for move in moves_after:
+		if board1.is_capture(move) == False:
+			moves_after.remove(move)
+
+	for move in moves_after:
+		if not board1.piece_at(move.to_square):
+			break
+		piece_attacked = board1.piece_at(move.to_square).symbol().upper()
+		#calculates if material is higher
+		if PIECE_VALUES[piece_attacked] > PIECE_VALUES[piece_type]: 
+			p_sq = [chess.square_file(move.to_square), chess.square_rank(move.to_square)]
+			if len(is_guarded(p_sq, board1.fen())) == 0 : return True
+			if PIECE_VALUES[piece_attacked] > PIECE_VALUES[board1.piece_at(move.from_square).symbol().upper()]: return True
+
+	return is_pinned_flag
+
+
+### gives_fork 
+### 
+### input: piece square (in format [file, rank]) and FEN
+### output: boolean: 1 if the piece gives a fork, and zero if not
+
+def gives_fork(piece, fen):
+	# creates board
+	board = chess.Board(fen)
+
+	# converts piece to square
+	square = chess.square(piece[0], piece[1])
+
+	# finds the piece on the square
+	piece_type = board.piece_at(square).symbol().upper()
+	color = board.piece_at(square).color
+
+	# gets list of attacks from the square
+	attack_squares = board.attacks(square)
+
+	#creates a counter of pieces of greater value or unguarded the piece attacks
+	attack_count = 0
+
+	for sq in attack_squares:
+		if board.piece_at(sq):
+			#checks that piece attacked is of opposite color
+			if color != board.piece_at(sq).color:
+				# checks if greater value or unguarded and if so adds 1 
+				if PIECE_VALUES[board.piece_at(sq).symbol().upper()] > PIECE_VALUES	[piece_type] or  len(is_guarded([chess.square_file(sq), chess.square_rank(sq)], fen))==0:
+					attack_count +=1
+
+	return attack_count > 1
+
+
 
 
 ## Helper function to return the index of halfway through the early game
@@ -354,6 +464,13 @@ def mid_midgame(game_dict):
         index = None
     return index
 
+## Helper function to cap an index at the last index of the game if it is None
+def cap_index(i, game_dict):
+    max_i = len(game_dict['board_states_FEN']) - 1
+    if i == None:
+        return max_i
+    else:
+        return i
 
 ## Helper function to find castles
 ## Pass it the game_dict and a boolean for which player to check: True = white, False = black
@@ -364,7 +481,7 @@ def mid_midgame(game_dict):
 ## artificial : 1 if the castle was artificial, 0 otherwise
 ##
 ## An artificial castle will be:
-## - Measured half way through the mid game
+## - Happened by half way through the mid game
 ##    - Since the king moving out of the back row to artificial castle could trigger the start of the mid game
 ## - King not on the d/e files
 ## - King on the back rank
@@ -602,16 +719,23 @@ def bishop_features(game_dict):
     ## Check whether when there are only two minor pieces in play, those pieces are bishops.
     if ((len(game_dict['white_pieces'][two_minor_pieces_turns(game_dict)[0]]['B']) == 2) and (two_minor_pieces_turns(game_dict)[0] != -1)):
         bishop_pair = 1
-    for i in range(len(game_dict['board_states'])):
-        board_state = game_dict['board_states'][i]
 
+    ## The following method takes advantage of the fact that the sum of squares mod 2 returns the color of the square.
+    for i in range(len(game_dict['board_states'])):
+        # Get the board state:
+        board_state = game_dict['board_states'][i]
+        
+        # Get the pieces
         white_pieces, black_pieces = get_piece_locations(board_state)
+
+        # Check: we haven't already set opp_color, and both players each have one bishop
         if ((opp_color == 0) and ((len(white_pieces['B']) == 1) and (len(black_pieces['B']) == 1))):
+            # Check if square parities match
             if ( (sum(white_pieces['B'][0]) % 2) == (sum(black_pieces['B'][0]) % 2)):
                 opp_color = -1
             else:
                 opp_color = 1
-        
+        # Add for coherent pawns, subtract for incoherent pawns 
         if (len(white_pieces['B']) == 1):
             one_bishop_turn_counter += 1
             white_parity = sum(white_pieces['B'][0]) % 2
@@ -621,6 +745,7 @@ def bishop_features(game_dict):
                 else:
                     bishop_pawns += 1
     if (one_bishop_turn_counter != 0):
+        # If the players ever had one bishop, normalize by number of turns when they had one bishop
         bishop_pawns = bishop_pawns / one_bishop_turn_counter
 
 
@@ -668,13 +793,58 @@ def bishop_features(game_dict):
 
     return bishop_pair, k_side_fianchetto, q_side_fianchetto, bishop_attack_counter, long_diag_turns, opp_color, bishop_pawns
 
+def minor(game_dict):
+    ## Various combined minor piece features:
+    nb_pref = 0
+    nb_develop = 0
 
-## Outputs a list [A,B,C,D,A#,B#,C#,D#,E#,side] where
-## A,B,C,D : one-hots for ECO codes (omit E)
-## A#,B#,C#,D#,E# : interaction terms, the one-hot times the number of the opening
-## side : Float in [-1,1] i.e. Queen to King for white's preferred side to develop onto
-##       Measures this by finding the center of mass of certain squares at the mid early game
-##       The squares I'll consider are those that don't have the same piece that they started with
+    pref_turns = 0
+    fully_developed = False
+
+    ## Iterate through board states:
+    for i in range(len(game_dict['board_states'])):
+        board = game_dict['board_states'][i]
+        white_pieces, black_pieces = get_piece_locations(board)
+        
+
+        ## Count 'developed' minor pieces
+        if (not fully_developed):
+            minor_pieces = []
+            for knight in white_pieces['N']:
+                minor_pieces.append(knight)
+                if knight[1] > 0:
+                    nb_develop += 1
+
+            for bishop in white_pieces['B']:
+                minor_pieces.append(bishop)
+                if bishop[1] > 0:
+                    nb_develop -= 1
+
+            developed = [(piece[1] > 0) for piece in minor_pieces]
+
+            fully_developed = all(developed)
+    
+        ## add +1 for each knight, -1 for each bishop in play for white, subtract those values for black 
+        # (if both players have the same number of minor pieces):
+        if ((len(white_pieces['N']) + len(white_pieces['B'])) == (len(black_pieces['B']) + len(black_pieces['N']))):
+            nb_pref += len(white_pieces['N']) - len(black_pieces['N'])
+            nb_pref -= len(white_pieces['B']) - len(black_pieces['B'])
+            pref_turns += 1
+
+    ## As always, we normalize by turns we are considering:
+
+    nb_pref = nb_pref / pref_turns
+    nb_develop = nb_develop / len(game_dict['board_states'])
+
+    return nb_pref, nb_develop
+
+### White development
+### Outputs a list [A,B,C,D,A#,B#,C#,D#,E#,side] where
+### A,B,C,D : one-hots for ECO codes (omit E)
+### A#,B#,C#,D#,E# : interaction terms, the one-hot times the number of the opening
+### side : Float in [-1,1] i.e. Queen to King for white's preferred side to develop onto
+###       Measures this by finding the center of mass of certain squares at the mid early game
+###       The squares I'll consider are those that don't have the same piece that they started with
 def white_development(game_dict):
     # I'll include a one-hot for E at first, remove it later
     output = np.zeros(11)
@@ -710,14 +880,15 @@ def white_development(game_dict):
     
     return output
 
-## Outputs a list [earliness, side, side_relative, artificial, development] where
-## earliness : float in [0,1], 1/(the turn they castled), 0 if no castle
-## side : +1 for king side, -1 for queen side, 0 for no castle
-## side_relative : +1 for same side as opponent, -1 for opposite side, 0 if one of them didn't castle
-## artificial : 0 if bonafide castle, 1 if artificial
-## development : float in [0,1] for how empty the back rank opposite their castling side is
-##               calculated as 1 - (# pieces there) / 3, 0 if no castling
-## So if white castles and they developed their queen side N and B but the R is still there, then development = 0.66
+### White castling
+### Outputs a list [earliness, side, side_relative, artificial, development] where
+### earliness : float in [0,1], 1/(the turn they castled), 0 if no castle
+### side : +1 for king side, -1 for queen side, 0 for no castle
+### side_relative : +1 for same side as opponent, -1 for opposite side, 0 if one of them didn't castle
+### artificial : 0 if bonafide castle, 1 if artificial
+### development : float in [0,1] for how empty the back rank opposite their castling side is
+###               calculated as 1 - (# pieces there) / 3, 0 if no castling
+### So if white castles and they developed their queen side N and B but the R is still there, then development = 0.66
 def white_castling(game_dict):
     
     # Call helper function to check who castled, which side, and when
@@ -756,6 +927,7 @@ def white_castling(game_dict):
     return [earliness, side_white, side_relative, artificial_white, development]
 
 
+### White pawns
 ### Outputs a list
 ### [king_protection, center_strength, doubled, isolated, backward, color
 ###    forwardness, guarded_forwardness, en_passant, storming, chain_count, longest_chain]
@@ -783,13 +955,9 @@ def white_pawns(game_dict):
     
     # If any of these are None then that could mess with computations
     # So replace None with the maximum index
-    max_index = len(game_dict['board_states']) - 1
-    if midgame_index == None:
-        midgame_index = max_index
-    if mid_midgame_index == None:
-        mid_midgame_index = max_index
-    if endgame_index == None:
-        endgame_index = max_index
+    midgame_index = cap_index(midgame_index, game_dict)
+    mid_midgame_index = cap_index(midgame_index, game_dict)
+    endgame_index = cap_index(midgame_index, game_dict)
         
     # Lastly, if the midgame was 0 turns long then dividing over the length of the midgame (0) will give an error; so, a fix:
     midgame_length = endgame_index - midgame_index
@@ -998,12 +1166,211 @@ def white_pawns(game_dict):
     
     chain_count = chain_count / midgame_length
     longest_chain = longest_chain / midgame_length
-    
-    ### FIXME can assume games reach the midgame (not necc endgame)
 
     return [king_protection, center_strength, doubled, isolated, backward, color,
             forwardness, guarded_forwardness, en_passant, storming, chain_count, longest_chain]
 
+
+### White board
+### Outputs a list
+### [rank, density, attack, pawn_pref, minor_pref, rook_pref, queen_pref]
+### where
+### rank : average rank of white's pieces, averaged over the midgame
+### density : float in [0,1]. The density of a piece is (# adjacent squares occupied) / (# adjacent squares),
+###           so average that over all pieces and the midgame.
+### attack : # of squares attacked, averaged over the midgame
+### pawn_pref : float in [0,1], fraction of the pawns on the board that are white's, averaged over the midgame
+### minor_pref : similar to previous, counting both knights and bishops
+### rook_pref : similar to previous
+### queen_pref : similar to previous
+###
+### If the midgame has length 0, just take their value at the index of the midgame
+def white_board(game_dict):
+    # First get all the relevant indices for board_states
+    midgame_index = game_dict['middle_game_index']
+    endgame_index = game_dict['end_game_index']
+    midgame_index = cap_index(midgame_index, game_dict)
+    endgame_index = cap_index(endgame_index, game_dict)
+    
+    # In case there was no midgame, pretend there was a midgame of length 1
+    if endgame_index == midgame_index:
+        endgame_index = midgame_index + 1
+    
+    # For each board state, calculate the stats and add to the running totals
+    # At the end, take the averages
+    
+    output = np.zeros(7)
+    
+    for i in range(midgame_index,endgame_index):
+        # Things from the dictionary
+        white_pieces = game_dict['white_pieces'][i]
+        black_pieces = game_dict['black_pieces'][i]
+        board_object = chess.Board(game_dict['board_states_FEN'][i])
+
+        # Formats the dictionaries as lists of coordinates of spaces occupied
+        white_coordinates = [coords for piece in white_pieces.values() for coords in piece]
+        black_coordinates = [coords for piece in black_pieces.values() for coords in piece]
+
+        # Formats the coords as sets of numbers, where each number represents a square occupied
+        white_locations = set([chess.square(coords[0],coords[1]) for coords in white_coordinates])
+        black_locations = set([chess.square(coords[0],coords[1]) for coords in black_coordinates])
+        all_locations = set(white_locations | black_locations)
+        
+        ## Rank
+        rank = np.mean([coords[1] for coords in white_coordinates])
+        
+        ## Density
+        # This board of all kings makes it easy to determine the adjacent squares, since that would be the squares a king attacks
+        K = 'K'*8
+        adjacency_object = chess.Board((K+'/')*7+K)
+        
+        # Divide the number of pieces adjacent to our pieces by the number of squares adjacent to our pieces
+        adjacent_squares = white_locations
+        for loc in white_locations:
+            adjacent_squares = adjacent_squares | set([square for square in adjacency_object.attacks(loc)])
+        density = len(adjacent_squares & all_locations) / len(adjacent_squares)
+        
+        ## Density alt: first version I did
+        # I'll add up the density of each piece and take the average at the end
+        #density = 0
+        # For each white piece
+        #for loc in white_locations:
+        #    # Find its neighbors
+        #    adj_squares = set([square for square in adjacency_object.attacks(loc)])
+        #    
+        #    # Calculate its density
+        #    density = density + len(adj_squares & all_locations) / len(adj_squares)
+        #density = density / len(white_locations)
+        
+        ## Attack
+        # Some nice job security code
+        num_attacked = len(set([square for loc in white_locations for square in board_object.attacks(loc)]))
+        
+        ## Pref
+        
+        # Pawns
+        white = len(white_pieces['P'])
+        black = len(black_pieces['P'])
+        if white + black == 0:
+            pawn_pref = 0.5
+        else:
+            pawn_pref = white / (white+black)
+        
+        # Minors
+        white = len(white_pieces['N']) + len(white_pieces['B'])
+        black = len(black_pieces['N']) + len(black_pieces['B'])
+        if white + black == 0:
+            minor_pref = 0.5
+        else:
+            pieces = game_dict['black_pieces'][1::2]
+
+    # Specifically, the king and rooks
+    king_positions = [move['K'] for move in pieces]
+    rook_positions = [move['R'] for move in pieces]
+
+    # Loop over these positions to find the index of the castle
+    index = None
+    for i in range(len(king_positions)):
+        king_pos = king_positions[i][0]
+
+        # If we're still on the d/e files, keep searching
+        if (king_pos[0] == 4) | (king_pos[0] == 3): continue
+            
+       # If we're not on our starting rank, keep searching
+        if player & (king_pos[1] != 0): continue
+        elif (not player) & (king_pos[1] != 7): continue
+
+        # Check if I am to the right or left of all my rooks:
+        # Right (for each rook, check if we're to the right of its x index; then see if this is true for all rooks)
+        if all([(rook_pos[0] < king_pos[0]) for rook_pos in rook_positions[i]]):
+            index = i
+            side = 1 # King side castle
+            break
+        # Left
+        elif all([(rook_pos[0] > king_pos[0]) for rook_pos in rook_positions[i]]):
+            index = i
+            side = -1 # Queen side castle
+            break
+    # Note that when we set index = i this indexes white/black's moves, not the board positions
+            minor_pref = white / (white+black)
+        
+        # Rooks
+        white = len(white_pieces['R'])
+        black = len(black_pieces['R'])
+        if white + black == 0:
+            rook_pref = 0.5
+        else:
+            rook_pref = white / (white+black)
+        
+        # Queens
+        white = len(white_pieces['Q'])
+        black = len(black_pieces['Q'])
+        if white + black == 0:
+            queen_pref = 0.5
+        else:
+            queen_pref = white / (white+black)
+        
+        # Add to our running totals for the output
+        output = output + [rank,density,num_attacked,pawn_pref,minor_pref,rook_pref,queen_pref]
+    
+    output = output / (endgame_index - midgame_index)
+    return list(output)
+
+### White clusters
+### Outputs a list
+### [MLL, ML, MM, MR, MRR, BL, BM, BR]
+### where the abbreviations are for different rectangles of squares on the board, and their values are
+### white's fractional presence in the zones, averaged throughout the midgame
+### The zones are (given as ranks/files):
+### MLL : 45/a
+### ML : 45/bc
+### MM : 45/de
+### MR : 45/fg
+### MRR : 45/h
+### BL : 3/abc
+### BM : 3/de
+### BR : 3/fgh
+###
+### If the midgame had length 0, just calculate this at the turn of the midgame
+def white_clusters(game_dict):
+    ## Lots of this is similar to white_board
+    
+    # First get all the relevant indices for board_states
+    midgame_index = game_dict['middle_game_index']
+    endgame_index = game_dict['end_game_index']
+    midgame_index = cap_index(midgame_index, game_dict)
+    endgame_index = cap_index(endgame_index, game_dict)
+    
+    # In case there was no midgame, pretend there was a midgame of length 1
+    if endgame_index == midgame_index:
+        endgame_index = midgame_index + 1
+        
+    # Create sets to represent the square clusters
+    MLL_mask = set(chess.SquareSet((chess.BB_RANK_4 | chess.BB_RANK_5) & chess.BB_FILE_A))
+    ML_mask  = set(chess.SquareSet((chess.BB_RANK_4 | chess.BB_RANK_5) & (chess.BB_FILE_B | chess.BB_FILE_C)))
+    MM_mask  = set(chess.SquareSet((chess.BB_RANK_4 | chess.BB_RANK_5) & (chess.BB_FILE_D | chess.BB_FILE_E)))
+    MR_mask  = set(chess.SquareSet((chess.BB_RANK_4 | chess.BB_RANK_5) & (chess.BB_FILE_F | chess.BB_FILE_G)))
+    MRR_mask = set(chess.SquareSet((chess.BB_RANK_4 | chess.BB_RANK_5) & chess.BB_FILE_H))
+    BL_mask  = set(chess.SquareSet(chess.BB_RANK_3 & (chess.BB_FILE_A | chess.BB_FILE_B | chess.BB_FILE_C)))
+    BM_mask  = set(chess.SquareSet(chess.BB_RANK_3 & (chess.BB_FILE_D | chess.BB_FILE_E)))
+    BR_mask  = set(chess.SquareSet(chess.BB_RANK_3 & (chess.BB_FILE_F | chess.BB_FILE_G | chess.BB_FILE_H)))
+    masks = [MLL_mask,ML_mask,MM_mask,MR_mask,MRR_mask,BL_mask,BM_mask,BR_mask]
+    
+    output = np.zeros(8)
+    
+    for i in range(midgame_index,endgame_index):
+        # Things from the dictionary
+        white_pieces = game_dict['white_pieces'][i]
+
+        # Formats the dictionaries as sets of numbers, where each number represents a square occupied
+        white_locations = set([chess.square(coords[0],coords[1]) for piece in white_pieces.values() for coords in piece])
+        
+        # Updates the running total of our fractions
+        output = output + [len(mask & white_locations) / len(mask) for mask in masks]
+    # Average
+    output = output / (endgame_index - midgame_index)
+    
+    return list(output)
 
 ### discovered_checks function
 ### INPUT: takes in a game dict
@@ -1117,3 +1484,109 @@ def distribution_piece_moves(gameDict):
 			dict['R'] +=1/len(gameDict['white_moves'])
 		else: dict[piece] +=1/len(gameDict['white_moves'])
 	return dict
+
+### pins function
+### input: gameDict
+### output: Dictionary with keys "pin_chances", "pins_given", "time_pinned"
+### pin_chances : number of opportunites white had to put black in a pin
+### pins_given : number of turns white had black pinned
+### time_pinned : arrary of turns for continuous pins
+
+def pins(gameDict):
+	#creates a list of current pins
+	current_pins = {}	
+
+	#creates a list of total pin and length
+	total_pins = []
+
+	#counter for number of turns with black pinned
+	pins_given = 0
+
+	#counts number of times black is pinned
+	for i in range(0, len(gameDict["black_pieces"])):
+		if not i%2:
+			for pieces in gameDict["black_pieces"][i].values():
+				if len(pieces) == 0: break
+				for piece in pieces:
+					if is_pinned(piece, gameDict["board_states_FEN"][i]):
+						pins_given +=1
+	
+	#counts pins for white
+	for i in range(0, len(gameDict["white_pieces"])):
+		if i %2:
+			#removes any pieces which are not pinned
+			for piece_str in current_pins.copy().keys():
+				#converts to piece integer tuple
+				piece = [int(piece_str[1]), int(piece_str[4])]
+				if is_pinned(piece, gameDict["board_states_FEN"][i ]) == False:
+					total_pins.append(current_pins.pop(piece_str))
+			for pieces in gameDict["white_pieces"][i].values():
+				if len(pieces) == 0:break
+				for piece in pieces:	
+					if is_pinned(piece, gameDict["board_states_FEN"][i]):
+						if str(piece) in current_pins:
+							current_pins[str(piece)] +=1
+						else: current_pins[str(piece)] =1
+
+	#pops of all elements at the end
+	for key in current_pins.keys():
+		total_pins.append(current_pins.pop(key))
+	return {"pins_given":pins_given, "time_pinned":	total_pins}
+
+
+### forks
+### input: game dictionary
+### output: number of forks given
+
+def forks(gameDict):
+	fork_counter = 0
+
+	for i in range(len(gameDict['white_pieces'])):
+		if i %2:
+			for pieces in gameDict["white_pieces"][i].values():
+				if len(pieces) == 0: break
+				for piece in pieces:
+					if gives_fork(piece, gameDict["board_states_FEN"][i]):
+						fork_counter += 1
+					
+	return fork_counter
+
+
+### pieces_guarded
+### input: game dictionary
+### output: average (over the mid-game) of number of pieces guarding attacked pieces divided by the number of attacked pieces times the number of pieces for white
+
+def pieces_guarded(gameDict):
+	# counters for number of pieces attacked, number of pieces guarding, and number of pieces for white
+	pieces_attacked = []
+	pieces_guarding = []
+	pieces_white = []
+
+	# loops through moves in the midgame
+	for i in range(gameDict["middle_game_index"], gameDict["end_game_index"]):
+		# counter for number of white pieces
+		white_pieces_turn = 0
+		# finds all white pieces attacked by black and puts them in a list
+		board = chess.Board(gameDict["board_states_FEN"][i])
+		piece_attacked_turn = []
+		
+		for pieces in gameDict["white_pieces"][i].values():
+			for piece in pieces:
+				white_pieces_turn +=  1 
+				if board.is_attacked_by(chess.BLACK, chess.square(piece[0],piece[1])): piece_attacked_turn.append(piece)
+
+		# checks which white pieces are defending them (stored as a chess square)
+		piece_defending_turn = set()
+		
+		for piece in piece_attacked_turn:
+			for sq in board.attackers(chess.WHITE, chess.square(piece[0], piece[1])): 
+				piece_defending_turn.add(sq)
+
+		pieces_attacked.append(len(piece_attacked_turn))
+		pieces_guarding.append(len(piece_defending_turn))
+		pieces_white.append(white_pieces_turn)
+
+		p_a = np.array(pieces_attacked)		
+		p_g = np.array(pieces_guarding)
+		p_w = np.array(pieces_white)
+	return np.mean(p_a/(p_g * p_w)) / (gameDict["end_game_index"] - gameDict["middle_game_index"])
