@@ -1554,3 +1554,101 @@ def pieces_guarded(gameDict):
 		p_g = np.array(pieces_guarding)
 		p_w = np.array(pieces_white)
 	return np.mean(p_a/(p_g * p_w)) / (gameDict["end_game_index"] - gameDict["middle_game_index"])
+
+### trades
+### input: game dictionary
+### output: 'num_trades' : number of trades in a game, 'num_direct_trades' : number of direct trades (pieces are traded on the same square), 'num_indirect_trades' : number of indirect trades
+### 			(equal material traded on different squares), 'num_direct_trades_white' : number of direct trades initiated by white, 'num_indirect_trades_white' : number of indirect trades initiated by white, 
+###			'avg_time_between_direct_trade' :number of white moves between black capturing on a direct trade and white recapturing divided by number of such trades
+def trades(gameDict):
+	trades_list = []
+	trade_moves = []
+	
+	#looks first for direct trades
+	for i in range(max(len(gameDict['black_moves']), gameDict['middle_game_index'])):
+
+		#checks if there is a white capture and that the move has not already been added to a trade
+		if gameDict['white_moves'][i]['capture'] != '' and 2*i not in trade_moves:
+
+			# if piece values are the same, we check first for a direct trade
+			if PIECE_VALUES[gameDict['white_moves'][i]['piece']] == PIECE_VALUES[gameDict['white_moves'][i]['capture']]:
+				square = gameDict['white_moves'][i]['to']
+				for j in range(0,3):
+					if i+j >= len(gameDict['black_moves']): break
+
+					#checks that white hasn't moved away and if so changes the square
+					if j >0 and gameDict['white_moves'][i+j]['from'] == square: square = gameDict['white_moves'][i+j]['to']
+	
+					#checks if black takes and creates trade data if it does along with marking the move number
+					if gameDict['black_moves'][i+j]['to'] == square:
+						trade_temp = {
+								'initiated' :'white', 
+								'white_traded' : gameDict['white_moves'][i]['piece'], 
+								'black_traded' : gameDict['white_moves'][i]['capture'], 
+								'move_number' : 2*i, 
+								'time_to_trade' : j +1 , 
+								'type' : 'direct'
+						}
+						trades_list.append(trade_temp) 
+						trade_moves.append(2*(i+j) +1)
+						trade_moves.append(2*i)
+						break
+
+		#now goes to black moves and checks if there is a direct trade
+		if gameDict['black_moves'][i]['capture'] != '' and 2*i +1 not in trade_moves:
+
+			#check if piece values are the same
+			if PIECE_VALUES[gameDict['black_moves'][i]['piece']] == PIECE_VALUES[gameDict['black_moves'][i]['capture']]:
+				square = gameDict['black_moves'][i]['to']
+				for j in range(1,4): 
+					if i+j >=  len(gameDict['white_moves']): break
+					#checks that black hasn't moved away and if so changes the square
+					if j > 1 and i+j < len(gameDict['black_moves']) and gameDict['black_moves'][i+j]['from'] == square: square = gameDict['black_moves'][i+j]['to']
+
+					#checks if white takes and creates trade data if it does along with marking the move number
+					if gameDict['white_moves'][i+j]['to'] == square:
+						trade_temp = {'initiated' :'black', 'white_traded' : gameDict['black_moves'][i]['capture'], 'black_traded' :gameDict['white_moves'][i+j]['capture'], 'move_number' : 2*i+1, 'time_to_trade' : j, 'type' : 'direct'}
+						trades_list.append(trade_temp) 
+						trade_moves.append(2*i +1)
+						trade_moves.append(2*(i+j))
+						break
+
+
+	for i in range(len(gameDict['black_moves'])):
+		# checks if there is a white capture that is not yet part of a trade
+		if gameDict['white_moves'][i]['capture'] != '' and 2* i not in trade_moves and 2* i + 1 not in trade_moves:
+				piece_value = PIECE_VALUES[gameDict['white_moves'][i]['capture']]
+		
+				#checks next move of black to see if they've taken a piece of the same value
+					#checks if black takes and creates trade data if it does
+				if gameDict['black_moves'][i]['capture'] in PIECE_VALUES and PIECE_VALUES[gameDict['black_moves'][i]['capture']] == piece_value:
+					trade_temp = {'initiated' :'white', 'white_traded' : gameDict['black_moves'][i]['capture'], 'black_traded' :gameDict['white_moves'][i]['capture'], 'move_number' : 2*i, 'time_to_trade' : 1, 'type' : 'indirect'}
+					trades_list.append(trade_temp) 
+					trade_moves.append(2*(i) + 1)
+					trade_moves.append(2*i)
+					break 
+	
+		# checks if there is a black capture that is not yet part of a trade
+		if gameDict['black_moves'][i]['capture'] != '' and (2* i +1) not in trade_moves and 2*(i+1) not in trade_moves and 2*(i+1) < len(gameDict['white_moves']):
+				piece_value = PIECE_VALUES[gameDict['black_moves'][i]['capture']]
+		
+				#checks next move of black to see if they've taken a piece of the same value
+					#checks if black takes and creates trade data if it does
+				if gameDict['white_moves'][i+1]['capture'] in PIECE_VALUES and PIECE_VALUES[gameDict['white_moves'][i+1]['capture']] == piece_value:
+					trade_temp = {'initiated' :'black', 'white_traded' : gameDict['black_moves'][i]['capture'], 'black_traded' :gameDict['white_moves'][i+1]['capture'], 'move_number' : 2*i+1, 'time_to_trade' : 1, 'type' : 'indirect'}
+					trades_list.append(trade_temp) 
+					trade_moves.append(2*(i) + 1)
+					trade_moves.append(2*(i+1))
+					break 
+	
+	return {
+		'num_trades' : len(trades_list), 
+		'num_direct_trades' : sum(1 for trade in trades_list if trade['type'] == 'direct'), 
+		'num_indirect_trades' : sum(1 for trade in trades_list if trade['type'] == 'indirect'), 
+		'num_direct_trades_white' : sum(1 for trade in trades_list if (trade['type'] == 'direct' and trade['initiated'] == 'white')), 
+		'num_indirect_trades_white' : sum(1 for trade in trades_list if (trade['type'] == 'indirect' and trade['initiated'] == 'white')), 
+		'avg_time_between_direct_trade' : sum(trade['time_to_trade'] for trade in trades_list if trade['type'] == 'direct' and trade['initiated'] == 'black')/ max(1, sum(1 for trade in trades_list if trade['type'] == 'direct' and trade['initiated'] == 'black'))
+		}
+
+
+		
