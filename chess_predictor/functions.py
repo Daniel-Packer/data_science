@@ -924,7 +924,77 @@ def rook_features(game_dict):
 
     return open_files, semi_open_files, back_rank_rook, doubled_rooks, doubled_with_queen, rook_mobility
 
+def queen_features(game_dict):
+    ## Some helpful variables
+    queen_aggression = 0     # Measured in (0, mid_game_turn)
+    queeinchetto = 0        # Measured in (0, mid_game_turn)
+    queenvasion = 0         # Measured in (0, end_game_turn)
+    queen_mobility = 0       # Measured in (0, end_game_turn)
 
+    back_rank = 6
+    queen_turns = 0
+
+    ## Get middle and end game indices if they exist
+    # Set them to the end of the game if they do not
+    mid_game_turn = game_dict['middle_game_index']
+    if (mid_game_turn == None):
+        mid_game_turn = len(game_dict['board_states']) - 1
+
+    end_game_turn = game_dict['end_game_index']
+    if (end_game_turn == None):
+        end_game_turn = len(game_dict['board_states']) - 1
+
+    for i in range(mid_game_turn):
+        board = game_dict['board_states'][i]
+
+        white_pieces, black_pieces = get_piece_locations(board)
+        queens = white_pieces['Q']
+        if (len(queens) > 0):
+            queen_turns += 1
+        for queen in queens:
+            ## For black, turn this into 7 - queen[1]
+            queen_aggression += queen[1]
+            
+            ## Check for queeinchettos
+            if ((queen == (1,1)) or (queen == (6,1))):
+                queeinchetto = 1
+
+            if (queen[1] == back_rank):
+                queenvasion += 1
+
+        fen_board = chess.Board(game_dict['board_states_FEN'][i])
+
+        for move in fen_board.legal_moves:
+            if (str(fen_board.piece_at(move.from_square)) == 'Q'):
+                queen_mobility += 1
+
+    for i in range(mid_game_turn, end_game_turn):
+
+        board = game_dict['board_states'][i]
+
+        white_pieces, black_pieces = get_piece_locations(board)
+        queens = white_pieces['Q']
+
+        for queen in queens:
+            if (queen[1] == back_rank):
+                queenvasion += 1
+
+        fen_board = chess.Board(game_dict['board_states_FEN'][i])
+
+        for move in fen_board.legal_moves:
+            if (str(fen_board.piece_at(move.from_square)) == 'Q'):
+                queen_mobility += 1
+
+    ## As always, the normalization:
+
+    if (mid_game_turn > 0):
+        queeinchetto = queeinchetto / mid_game_turn
+    if (end_game_turn > 0):
+        queenvasion = queenvasion / end_game_turn
+        queen_mobility = queen_mobility / end_game_turn
+    if (queen_turns > 0):
+        queen_aggression = queen_aggression / queen_turns 
+    return queen_aggression, queeinchetto, queenvasion, queen_mobility
 
 ### White development
 ### Outputs a list [A,B,C,D,A#,B#,C#,D#,E#,side] where
