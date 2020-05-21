@@ -1731,7 +1731,7 @@ def trades(gameDict):
 	trade_moves = []
 	
 	#looks first for direct trades
-	for i in range(max(len(gameDict['black_moves']), gameDict['middle_game_index'])):
+	for i in range(min(len(gameDict['black_moves']), gameDict['end_game_index'])/2 +1):
 
 		#checks if there is a white capture and that the move has not already been added to a trade
 		if gameDict['white_moves'][i]['capture'] != '' and 2*i not in trade_moves:
@@ -1780,7 +1780,7 @@ def trades(gameDict):
 						break
 
 
-	for i in range(len(gameDict['black_moves'])):
+	for i in range(min(gameDict['end_game_index'],len(gameDict['black_moves'])/2 + 1)):
 		# checks if there is a white capture that is not yet part of a trade
 		if gameDict['white_moves'][i]['capture'] != '' and 2* i not in trade_moves and 2* i + 1 not in trade_moves:
 				piece_value = PIECE_VALUES[gameDict['white_moves'][i]['capture']]
@@ -1817,4 +1817,20 @@ def trades(gameDict):
 		}
 
 
-		
+### exchanges_possible
+### input: game Dict
+### output: average number of exchanges for white per move in the middle game
+
+def exchanges_possible(gameDict):
+	exchange_counter = 0
+	move_counter = 0
+	for i in range(1, gameDict['end_game_index'], 2):
+		board = chess.Board(gameDict['board_states_FEN'][i])
+		move_counter += 1
+		for pieces in gameDict['white_pieces'][i].values():
+			for piece in pieces:
+				for attacks in board.attacks(chess.square(piece[0], piece[1])):
+					if board.piece_at(attacks) and  board.piece_at(attacks).color == chess.BLACK and PIECE_VALUES[board.piece_at(attacks).symbol().upper()] == PIECE_VALUES[board.piece_at(chess.square(piece[0], piece[1])).symbol().upper()]:
+						exchange_counter += 1
+
+	return exchange_counter / move_counter
