@@ -1178,9 +1178,10 @@ def white_pawns(game_dict):
 
 ### White board
 ### Outputs a list
-### [rank, density, attack, pawn_pref, minor_pref, rook_pref, queen_pref]
+### [rank, file, density, attack, pawn_pref, minor_pref, rook_pref, queen_pref]
 ### where
 ### rank : average rank of white's pieces, averaged over the midgame
+### file : float in [-1,1], (average file) - 3.5 of white's pieces, averaged over the midgame
 ### density : float in [0,1]. The density of a piece is (# adjacent squares occupied) / (# adjacent squares),
 ###           so average that over all pieces and the midgame.
 ### attack : # of squares attacked, averaged over the midgame
@@ -1204,7 +1205,7 @@ def white_board(game_dict):
     # For each board state, calculate the stats and add to the running totals
     # At the end, take the averages
     
-    output = np.zeros(7)
+    output = np.zeros(8)
     
     for i in range(midgame_index,endgame_index):
         # Things from the dictionary
@@ -1223,6 +1224,9 @@ def white_board(game_dict):
         
         ## Rank
         rank = np.mean([coords[1] for coords in white_coordinates])
+        
+        ## File
+        file = np.mean([coords[0] for coords in white_coordinates]) - 3.5
         
         ## Density
         # This board of all kings makes it easy to determine the adjacent squares, since that would be the squares a king attacks
@@ -1275,7 +1279,7 @@ def white_board(game_dict):
             queen_pref = white / (white+black)
         
         # Add to our running totals for the output
-        output = output + [rank,density,num_attacked,pawn_pref,minor_pref,rook_pref,queen_pref]
+        output = output + [rank,file,density,num_attacked,pawn_pref,minor_pref,rook_pref,queen_pref]
     
     output = output / (endgame_index - midgame_index)
     return list(output)
