@@ -793,7 +793,12 @@ def bishop_features(game_dict):
 
     return bishop_pair, k_side_fianchetto, q_side_fianchetto, bishop_attack_counter, long_diag_turns, opp_color, bishop_pawns
 
-def minor(game_dict):
+
+## Returns floats,
+# nb_pref -- The preference in minor piece trades, favoring knights is positive, bishops is negative
+# nb_develop -- The preference in which minor pieces are developed first, favoring knights is positive, bishops is negative
+
+def minor_features(game_dict):
     ## Various combined minor piece features:
     nb_pref = 0
     nb_develop = 0
@@ -839,6 +844,93 @@ def minor(game_dict):
     nb_develop = nb_develop / develop_turns 
 
     return nb_pref, nb_develop
+
+def rook_features(game_dict):
+    ## Some helpful variables
+    open_files = 0          # Measured in (mid_game_turn, end_game_turn)
+    semi_open_files = 0     # Measured in (mid_game_turn, end_game_turn)
+    back_rank_rook = 0      # Measured in (0, end_game_turn)
+    doubled_rooks = 0       # Measured in (mid_game_turn, end_game_turn)
+    doubled_with_queen = 0  # Measured in (mid_game_turn, end_game_turn)
+    rook_mobility = 0       # Measured in (mid_game_turn, end_game_turn)
+
+    back_rank = 6
+
+    rook_turns = 0
+    
+    ## Get middle and end game indices if they exist
+    # Set them to the end of the game if they do not
+    mid_game_turn = game_dict['middle_game_index']
+    if (mid_game_turn == None):
+        mid_game_turn = len(game_dict['board_states']) - 1
+
+    end_game_turn = game_dict['end_game_index']
+    if (end_game_turn == None):
+        end_game_turn = len(game_dict['board_states']) - 1
+
+    ## Iterate through the early game
+    # back_rank_rook is the only feature to be detected here 
+    for i in range(mid_game_turn):
+        board = game_dict['board_states'][i]
+
+        white_pieces, black_pieces = get_piece_locations(board)
+        rooks = white_pieces['R']
+        ## For each rook, check if its on the opponents back pawn rank
+        # (change the back_rank variable to test for black)
+        for rook in rooks:
+            if (rook[1] == back_rank):
+                back_rank_rook += 1
+
+    ## Iterate through the middle game
+    # All rook features get tested here
+    for i in range(mid_game_turn, end_game_turn):
+        board = game_dict['board_states'][i]
+
+        white_pieces, black_pieces = get_piece_locations(board)
+        rooks = white_pieces['R']
+        queens = white_pieces['Q']
+        if (len(rooks) > 0):
+            rook_turns += 1
+        ## Check individual rook properties
+        for rook in rooks:
+            if (rook[1] == back_rank):
+                back_rank_rook += 1
+            ## My favorite line of python to date
+            if all([rook[0] != pawn[0] for pawn in white_pieces['P']]):
+                if all([rook[0] != pawn[0] for pawn in black_pieces['P']]):
+                    open_files += 1
+                else:
+                    semi_open_files += 1
+            for rook2 in rooks:
+                ## Check if the rooks are on the same file
+                if ((rook[0] == rook2[0]) and (rooks.index(rook) < rooks.index(rook2))):
+                    doubled_rooks += 1
+
+            for queen in queens:
+                if (rook[0] == queen[0]):
+                    doubled_with_queen += 1
+        ## We load in the FEN, and make it a pychess Board object to calculate legal moves more quickly
+        fen_board = chess.Board(game_dict['board_states_FEN'][i])
+        for move in fen_board.legal_moves:
+            if (str(fen_board.piece_at(move.from_square)) == 'R'):
+                rook_mobility += 1
+
+
+        ## Normalize all the metrics by game length:
+        # But don't want to divide by zero:
+    if (end_game_turn - mid_game_turn > 0):
+        open_files = open_files/ (end_game_turn - mid_game_turn)
+        semi_open_files = semi_open_files / (end_game_turn - mid_game_turn)
+        doubled_rooks = doubled_rooks / (end_game_turn - mid_game_turn)
+        doubled_with_queen = doubled_with_queen / (end_game_turn - mid_game_turn)
+    if rook_turns > 0:
+        rook_mobility = rook_mobility / rook_turns
+    if (end_game_turn > 0):
+        back_rank_rook = back_rank_rook / end_game_turn
+
+    return open_files, semi_open_files, back_rank_rook, doubled_rooks, doubled_with_queen, rook_mobility
+
+
 
 ### White development
 ### Outputs a list [A,B,C,D,A#,B#,C#,D#,E#,side] where
