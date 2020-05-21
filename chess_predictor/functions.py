@@ -1839,3 +1839,22 @@ def exchanges_possible(gameDict):
 						exchange_counter += 1
 
 	return exchange_counter / move_counter
+
+### king_squares_attacked
+### input: gameDict
+### output: average number of squares adjacent to king attacked in the midgame
+
+def king_squares_attacked(gameDict):
+	squares_attacked = 0
+	
+	for i in range(gameDict['middle_game_index'], gameDict['end_game_index']):
+		board = chess.Board(gameDict['board_states_FEN'][i])
+		
+		#finds white king
+		king = board.king(chess.WHITE)
+	
+		# iterates through squares adjacent to king and increments counter if attacked
+		for square in board.attacks(king):
+			if board.is_attacked_by(chess.BLACK, square): squares_attacked +=1
+
+	return squares_attacked / (gameDict['end_game_index'] - gameDict['middle_game_index'])
