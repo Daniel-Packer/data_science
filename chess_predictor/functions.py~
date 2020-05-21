@@ -641,8 +641,10 @@ def knight_features(game_dict):
 
 
     ## Check whether when there are only two minor pieces in play, those pieces are knights.
-    if ((len(game_dict['white_pieces'][two_minor_pieces_turns(game_dict)[0]]['N']) == 2) and (two_minor_pieces_turns(game_dict)[0] != -1)):
-        knight_pair = 1
+
+    if (two_minor_pieces_turns(game_dict)[0] > 0):
+        if ((len(game_dict['white_pieces'][two_minor_pieces_turns(game_dict)[0]]['N']) == 2) and (two_minor_pieces_turns(game_dict)[0] != -1)):
+            knight_pair = 1
     
     ## The following will iterate through midgame turns to check each board state for various features:
     # First check that we make it to the middle game:
@@ -678,10 +680,11 @@ def knight_features(game_dict):
                     knight_attack_counter += 1 / num_knights
     
         ## Scale the repositioning, attack, and outpost counters by the total number of moves in the mid-game, so longer mid-games don't get overbiased.
-        knight_outpost_turns = knight_outpost_turns / (end_game_index - game_dict['middle_game_index'])
+        if (end_game_index - game_dict['middle_game_index'] > 0):
+            knight_outpost_turns = knight_outpost_turns / (end_game_index - game_dict['middle_game_index'])
 
-        knight_repo_counter = knight_repo_counter / (end_game_index - game_dict['middle_game_index'])
-        knight_attack_counter = knight_attack_counter / (end_game_index - game_dict['middle_game_index']) 
+            knight_repo_counter = knight_repo_counter / (end_game_index - game_dict['middle_game_index'])
+            knight_attack_counter = knight_attack_counter / (end_game_index - game_dict['middle_game_index']) 
 
 
     return knight_pair, knight_outpost_turns, knight_repo_counter, knight_attack_counter
@@ -711,8 +714,9 @@ def bishop_features(game_dict):
     long_diag_squares = [0, 9, 18, 27, 36, 45, 54, 63, 7, 14, 21, 28, 35, 42, 49, 56]
     
     ## Check whether when there are only two minor pieces in play, those pieces are bishops.
-    if ((len(game_dict['white_pieces'][two_minor_pieces_turns(game_dict)[0]]['B']) == 2) and (two_minor_pieces_turns(game_dict)[0] != -1)):
-        bishop_pair = 1
+    if (two_minor_pieces_turns(game_dict)[0] > 0):
+        if ((len(game_dict['white_pieces'][two_minor_pieces_turns(game_dict)[0]]['B']) == 2) and (two_minor_pieces_turns(game_dict)[0] != -1)):
+            bishop_pair = 1
 
     ## The following method takes advantage of the fact that the sum of squares mod 2 returns the color of the square.
     for i in range(len(game_dict['board_states'])):
@@ -782,8 +786,10 @@ def bishop_features(game_dict):
                 if (str(board.piece_at(square)) == 'B'):
                     long_diag_turns += 1/num_bishops
         ## Scale the attack and long_diag counters by the total number of moves in the mid-game, so longer mid-games don't get overbiased.
-        bishop_attack_counter = bishop_attack_counter / abs(end_game_index - game_dict['middle_game_index'])
-        long_diag_turns = 2 * long_diag_turns / abs(end_game_index - game_dict['middle_game_index']) ## The 2 * is so that a score of one would be all bishops on their long diagonals for the entire midgame, since we are dividing by the total number of half-turns, while the counted turns are only those of white
+        if (end_game_index - game_dict['middle_game_index'] > 0):
+            bishop_attack_counter = bishop_attack_counter / abs(end_game_index - game_dict['middle_game_index'])
+            long_diag_turns = 2 * long_diag_turns / abs(end_game_index - game_dict['middle_game_index'])
+            ## The 2 * is so that a score of one would be all bishops on their long diagonals for the entire midgame, since we are dividing by the total number of half-turns, while the counted turns are only those of white
 
     return bishop_pair, k_side_fianchetto, q_side_fianchetto, bishop_attack_counter, long_diag_turns, opp_color, bishop_pawns
 
@@ -833,9 +839,10 @@ def minor_features(game_dict):
             pref_turns += 1
 
     ## As always, we normalize by turns we are considering:
-
-    nb_pref = nb_pref / pref_turns
-    nb_develop = nb_develop / develop_turns 
+    if (pref_turns > 0):
+        nb_pref = nb_pref / pref_turns
+    if (develop_turns > 0):
+        nb_develop = nb_develop / develop_turns 
 
     return nb_pref, nb_develop
 
@@ -932,6 +939,7 @@ def queen_features(game_dict):
     queen_mobility = 0       # Measured in (0, end_game_turn)
 
     back_rank = 6
+    queen_turns = 0
 
     ## Get middle and end game indices if they exist
     # Set them to the end of the game if they do not
@@ -948,6 +956,8 @@ def queen_features(game_dict):
 
         white_pieces, black_pieces = get_piece_locations(board)
         queens = white_pieces['Q']
+        if (len(queens) > 0):
+            queen_turns += 1
         for queen in queens:
             ## For black, turn this into 7 - queen[1]
             queen_aggression += queen[1]
@@ -960,13 +970,12 @@ def queen_features(game_dict):
                 queenvasion += 1
 
         fen_board = chess.Board(game_dict['board_states_FEN'][i])
-
+        ## Sum up all possible queen moves
         for move in fen_board.legal_moves:
             if (str(fen_board.piece_at(move.from_square)) == 'Q'):
                 queen_mobility += 1
 
     for i in range(mid_game_turn, end_game_turn):
-
         board = game_dict['board_states'][i]
 
         white_pieces, black_pieces = get_piece_locations(board)
@@ -983,14 +992,13 @@ def queen_features(game_dict):
                 queen_mobility += 1
 
     ## As always, the normalization:
-
     if (mid_game_turn > 0):
-        queen_aggression = queen_aggression / mid_game_turn
         queeinchetto = queeinchetto / mid_game_turn
     if (end_game_turn > 0):
         queenvasion = queenvasion / end_game_turn
         queen_mobility = queen_mobility / end_game_turn
-
+    if (queen_turns > 0):
+        queen_aggression = queen_aggression / queen_turns 
     return queen_aggression, queeinchetto, queenvasion, queen_mobility
 
 ### White development
