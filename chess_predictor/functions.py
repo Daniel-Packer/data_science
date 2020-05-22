@@ -1941,6 +1941,13 @@ def king_safety(gameDict):
 def get_game_id(gameDict):
 	return {'game_id' : gameDict['game_id']}	
 
+### get_white
+### input: gameDict
+### output: white_player
+
+def get_white(gameDict):
+	return {'white_player': gameDict['white_player']}
+
 
 #######################################################################################
 ##### Processing Game Features
@@ -1950,5 +1957,5 @@ def get_game_id(gameDict):
 ### input: gameDict
 ### output: dictionary of all feature dictionaries
 
-def get_features(gameDict):
-	
+def get_features(game):
+	return {**knight_features(game), **bishop_features(game), **minor_features(game), **rook_features(game), **queen_features(game), **white_development(game), **white_castling(game), **white_pawns(game), **white_board(game), **white_clusters(game), **discovered_checks(game), **distribution_piece_moves(game), **pins(game), **forks(game), **pieces_guarded(game), **trades(game), **exchanges_possible(game), **king_squares_attacked(game), **king_safety(game), **get_game_id(game), **get_white(game)}
