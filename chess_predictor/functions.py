@@ -1786,7 +1786,7 @@ def trades(gameDict):
 
 	
 	#looks first for direct trades
-	for i in range(min(len(gameDict['black_moves']), end_game //2 + 1):
+	for i in range(min(len(gameDict['black_moves']), end_game //2 + 1)):
 
 		#checks if there is a white capture and that the move has not already been added to a trade
 		if gameDict['white_moves'][i]['capture'] != '' and 2*i not in trade_moves:
