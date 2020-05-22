@@ -31,7 +31,7 @@ PIECE_VALUES = {'P':1, 'N':3, 'B':3, 'R':5, 'Q':9, 'K' :1000}
 
 ## Imports games and converts them into the dictionary type that we want
 def get_dicts(player_name, num_games, time_type, format_):
-    games_raw = lichess.api.user_games(player_name, max=num_games, perfType=num_games, format = format_)
+    games_raw = lichess.api.user_games(player_name, max=num_games, perfType=time_type, format = format_)
     games_list = games_raw.split('\n\n\n')
     return [get_gameDict(game) for game in games_list]
 
