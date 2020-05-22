@@ -1767,7 +1767,7 @@ def pieces_guarded(gameDict):
 		p_a = np.array(pieces_attacked)		
 		p_g = np.array(pieces_guarding)
 		p_w = np.array(pieces_white)
-	return {'pieces_guarded' :np.mean(p_a/(p_g * p_w)) / max(1, (end_game - mid_game))}
+	return {'pieces_guarded' :np.mean(p_a/(max(1, p_g * p_w))) / max(1, (end_game - mid_game))}
 
 ### trades
 ### input: game dictionary
