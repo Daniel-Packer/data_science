@@ -1767,7 +1767,13 @@ def pieces_guarded(gameDict):
 		p_a = np.array(pieces_attacked)		
 		p_g = np.array(pieces_guarding)
 		p_w = np.array(pieces_white)
-	return {'pieces_guarded' :np.mean(p_a/(max(1, p_g * p_w))) / max(1, (end_game - mid_game))}
+
+		cum_sum = 0
+		for i in range(len(p_a)):
+			cum_sum += p_a[i] / max(1, p_g[i] * p_w[i])	
+
+		mean = cum_sum / max(1, len(p_a))
+	return {'pieces_guarded' :mean / max(1, (end_game - mid_game))}
 
 ### trades
 ### input: game dictionary
@@ -1933,6 +1939,7 @@ def king_safety(gameDict):
 
 	if gameDict["end_game_index"] : end_game = gameDict["end_game_index"]
 	else: end_game = len(gameDict['board_states']) -1
+
 	# gets the indexes (in 'white_moves') of the king moves
 	move_index = []
 	for i in range(min(end_game,len(gameDict['white_moves']))):
@@ -1962,7 +1969,7 @@ def king_safety(gameDict):
 		
 		distance_from_king_sum += distance_from_king_sum_move / black_pieces
 
-	return {'king_moves': king_moves, 'king_moves_weighted' : king_moves_weighted, 'distance_from_king' : distance_from_king_sum / max(1,end_game)}
+	return {'king_moves': king_moves, 'king_moves_weighted' : king_moves_weighted, 'distance_from_king' : distance_from_king_sum / max(1, end_game)}
 				
 		
 ### get_url
