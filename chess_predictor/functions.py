@@ -48,6 +48,7 @@ def make_test_data(file_name, player_name, num_games, time_type):
 ### The get_gameDict function reads in a lichess pgn string and returns a game dictionary
 
 ### The game dictionary is a dictionary formatted with the following keys:
+### 'game_id' : lichess game_url 
 ### 'white_moves' : [list of move dictionaries for white moves (documentation below)]
 ### 'black_moves' : [list of move dictionaries for black moves]
 ### 'white_player' : string of the lichess username of the white player
@@ -84,7 +85,12 @@ def make_test_data(file_name, player_name, num_games, time_type):
 def get_gameDict(gamepgn):
 	#creates the game dictionary
 	gameDict = {'white_moves' : [], 'black_moves' :[], 'board_states' :[], 'board_states_FEN' :[], 'white_pieces': [], 'black_pieces': [],'middle_game_index' : None, 'end_game_index' : None }
-	
+
+	# reads in url
+	url_start = gamepgn.find('Site') +6
+	url_end = gamepgn.find('"', url_start)
+	gameDict['game_id'] = gamepgn[url_start: url_end]
+
 	#reads in white_player
 	name_start = gamepgn.find('White "') +7
 	name_end = gamepgn.find('"', name_start)
