@@ -1058,7 +1058,8 @@ def white_development(game_dict):
                 weight = weight + i
     output[-1] = (weight / pieces_moved) / 3.5 - 1
     
-    return output
+    return {'A': output[0],'B': output[1],'C': output[2],'D': output[3],
+            'A#': output[4],'B#': output[5],'C#': output[6],'D#': output[7],'E#': output[8],'w_development_side': output[9]}
 
 ### White castling
 ### Outputs a list [earliness, side, side_relative, artificial, development] where
@@ -1104,7 +1105,8 @@ def white_castling(game_dict):
                 piece_count = piece_count + 1
         development = 1 - piece_count / 3
         
-    return [earliness, side_white, side_relative, artificial_white, development]
+    return {'wc_earliness': earliness, 'wc_side': side_white,
+            'wc_relative': side_relative, 'wc_artificial': artificial_white, 'wc_development': development}
 
 
 ### White pawns
@@ -1356,8 +1358,11 @@ def white_pawns(game_dict):
      forwardness, guarded_forwardness, storming, chain_count, longest_chain] = totals / (endgame_index - midgame_index)
     
     # Le return
-    return [king_protection, center_strength, doubled, isolated, backward, tension, color,
-            forwardness, guarded_forwardness, en_passant, storming, chain_count, longest_chain, non_queen]
+    return {'wp_king_protection': king_protection, 'wp_center_strength': center_strength,
+            'wp_doubled': doubled, 'wp_isolated': isolated, 'wp_backward': backward,
+            'wp_tension': tension, 'wp_color': color, 'wp_forwardness': forwardness, 'wp_guarded_forwardness': guarded_forwardness,
+            'wp_en_passant': en_passant, 'wp_storming': storming,
+            'wp_chain_count': chain_count, 'wp_longest_chain': longest_chain, 'wp_non_queen': non_queen}
 
 
 ### White board
@@ -1466,7 +1471,9 @@ def white_board(game_dict):
         output = output + [rank,file,density,num_attacked,pawn_pref,minor_pref,rook_pref,queen_pref]
     
     output = output / (endgame_index - midgame_index)
-    return list(output)
+    
+    return {'wb_rank': output[0], 'wb_file': output[1], 'wb_density': output[2], 'wb_attack': output[3],
+            'wb_pawn_pref': output[4], 'wb_minor_pref': output[5], 'wb_rook_pref': output[6], 'wb_queen_pref': output[7]}
 
 ### White clusters
 ### Outputs a list
@@ -1522,7 +1529,8 @@ def white_clusters(game_dict):
     # Average
     output = output / (endgame_index - midgame_index)
     
-    return list(output)
+    return {'wcl_MLL': output[0], 'wcl_ML': output[1], 'wcl_MM': output[2], 'wcl_MR': output[3], 'wcl_MRR': output[4],
+            'wcl_BL': output[5], 'wcl_BM': output[6], 'wcl_BR': output[7]}
 
 ### discovered_checks function
 ### INPUT: takes in a game dict
