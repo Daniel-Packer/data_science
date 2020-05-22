@@ -645,7 +645,7 @@ def detect_outpost(game_dict, turn, player):
 ### Features
 ########################################
 
-### Knight Features function, will return a list of the form [Knight pair, knight outposts, knight repositioning, number of squares controlled].
+### Knight Features function, will return a dictionary of the form [Knight pair, knight outposts, knight repositioning, number of squares controlled].
 def knight_features(game_dict):
     ## I try to do my best to only consider the player generally, so that if we later want to implement this for the black player too, we simply change player to be an input
     player = 'white'
@@ -703,8 +703,8 @@ def knight_features(game_dict):
             knight_repo_counter = knight_repo_counter / (end_game_index - game_dict['middle_game_index'])
             knight_attack_counter = knight_attack_counter / (end_game_index - game_dict['middle_game_index']) 
 
-
-    return knight_pair, knight_outpost_turns, knight_repo_counter, knight_attack_counter
+    result_dict = {'wn_pair' : knight_pair, 'wn_outpost' : knight_outpost_turns, 'wn_repositioning': knight_repo_counter, 'wn_mobility' : knight_attack_counter}
+    return result_dict
 
 ## Bishop Features are:
 # Bishop Pair (1 for yes, 0 for no)
@@ -807,8 +807,9 @@ def bishop_features(game_dict):
             bishop_attack_counter = bishop_attack_counter / abs(end_game_index - game_dict['middle_game_index'])
             long_diag_turns = 2 * long_diag_turns / abs(end_game_index - game_dict['middle_game_index'])
             ## The 2 * is so that a score of one would be all bishops on their long diagonals for the entire midgame, since we are dividing by the total number of half-turns, while the counted turns are only those of white
+    return_dict = {'wb_pair' : bishop_pair, 'wk_side_fianchetto' : k_side_fianchetto, 'wq_side_fianchetto' : q_side_fianchetto, 'wb_mobility' : bishop_attack_counter, 'wlong_diagonal_control' : long_diag_turns, 'wopposite_color_b': opp_color, 'b_p_coherency' : bishop_pawns}
 
-    return bishop_pair, k_side_fianchetto, q_side_fianchetto, bishop_attack_counter, long_diag_turns, opp_color, bishop_pawns
+    return return_dict
 
 
 ## Returns floats,
@@ -860,8 +861,8 @@ def minor_features(game_dict):
         nb_pref = nb_pref / pref_turns
     if (develop_turns > 0):
         nb_develop = nb_develop / develop_turns 
-
-    return nb_pref, nb_develop
+    return_dict = {'wn_b_trade_pref':nb_pref, 'wn_b_develop_pref' : nb_develop}
+    return return_dict
 
 def rook_features(game_dict):
     ## Some helpful variables
@@ -945,8 +946,9 @@ def rook_features(game_dict):
         rook_mobility = rook_mobility / rook_turns
     if (end_game_turn > 0):
         back_rank_rook = back_rank_rook / end_game_turn
+    return_dict = {'wopen_files' : open_files, 'wsemi_open_files' : semi_open_files, 'wback_rank_r' : back_rank_rook, 'wdoubled_r' : doubled_rooks, 'wdoubled_with_q' : doubled_with_queen, 'wr_mobility' : rook_mobility}
 
-    return open_files, semi_open_files, back_rank_rook, doubled_rooks, doubled_with_queen, rook_mobility
+    return return_dict
 
 def queen_features(game_dict):
     ## Some helpful variables
@@ -1016,8 +1018,9 @@ def queen_features(game_dict):
         queen_mobility = queen_mobility / end_game_turn
     if (queen_turns > 0):
         queen_aggression = queen_aggression / queen_turns 
-    return queen_aggression, queeinchetto, queenvasion, queen_mobility
+    return_dict = {'wq_aggression' : queen_aggression, 'wq_fianchetto' : queeinchetto, 'wq_invasion' : queenvasion, 'wq_mobility' : queen_mobility}
 
+    return return_dict
 ### White development
 ### Outputs a list [A,B,C,D,A#,B#,C#,D#,E#,side] where
 ### A,B,C,D : one-hots for ECO codes (omit E)
