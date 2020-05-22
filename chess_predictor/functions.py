@@ -356,8 +356,7 @@ def is_pinned(p_sq, board_state_FEN):
 	#throws error if no piece at the place
 	piece = board.piece_at(sq)
 	if piece == None:
-		raise Exception("not a piece at this square")
-
+		raise Exception("no piece here")
 	# looks at the piece on the square
 	piece_type = piece.symbol().upper()
 	color = board.piece_at(sq).color
@@ -1671,11 +1670,13 @@ def pins(gameDict):
 			for piece_str in current_pins.copy().keys():
 				#converts to piece integer tuple
 				piece = [int(piece_str[1]), int(piece_str[4])]
-				if is_pinned(piece, gameDict["board_states_FEN"][i ]) == False:
+				board = chess.Board(gameDict['board_states_FEN'][i])
+				if (not board.piece_at(chess.square(piece[0],piece[1]))) or board.piece_at(chess.square(piece[0],piece[1])).color == chess.BLACK or is_pinned(piece, gameDict["board_states_FEN"][i]) == False:
 					total_pins.append(current_pins.pop(piece_str))
 			for pieces in gameDict["white_pieces"][i].values():
 				if len(pieces) == 0:break
 				for piece in pieces:	
+					
 					if is_pinned(piece, gameDict["board_states_FEN"][i]):
 						if str(piece) in current_pins:
 							current_pins[str(piece)] +=1
@@ -1754,7 +1755,7 @@ def trades(gameDict):
 	trade_moves = []
 	
 	#looks first for direct trades
-	for i in range(min(len(gameDict['black_moves']), gameDict['end_game_index'])/2 +1):
+	for i in range(min(len(gameDict['black_moves']), gameDict['end_game_index'])//2 +1):
 
 		#checks if there is a white capture and that the move has not already been added to a trade
 		if gameDict['white_moves'][i]['capture'] != '' and 2*i not in trade_moves:
@@ -1803,7 +1804,7 @@ def trades(gameDict):
 						break
 
 
-	for i in range(min(gameDict['end_game_index'],len(gameDict['black_moves'])/2 + 1)):
+	for i in range(min(gameDict['end_game_index'],len(gameDict['black_moves'])//2 + 1)):
 		# checks if there is a white capture that is not yet part of a trade
 		if gameDict['white_moves'][i]['capture'] != '' and 2* i not in trade_moves and 2* i + 1 not in trade_moves:
 				piece_value = PIECE_VALUES[gameDict['white_moves'][i]['capture']]
