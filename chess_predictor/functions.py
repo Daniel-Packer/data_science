@@ -1644,14 +1644,16 @@ def discovered_checks(gameDict):
 ### Output: dictionary with keys 'P', 'N', 'B', 'R', 'Q', 'K' with values of percentage of time that type of piece was moved
 
 def distribution_piece_moves(gameDict):
-	dict = {'P':0, 'N':0, 'B':0, 'R':0, 'Q':0, 'K':0}
+	dict = {'P_moves':0, 'N_moves':0, 'B_moves':0, 'R_moves':0, 'Q_moves':0, 'K_moves':0}
 
 	for i in range(0, len(gameDict['white_moves'])):
 		piece = gameDict['white_moves'][i]['piece']
 		if piece == 'O':
-			dict['K'] +=1/len(gameDict['white_moves'])
-			dict['R'] +=1/len(gameDict['white_moves'])
-		else: dict[piece] +=1/len(gameDict['white_moves'])
+			dict['K_moves'] +=1/len(gameDict['white_moves'])
+			dict['R_moves'] +=1/len(gameDict['white_moves'])
+		else: 
+			piece_code = piece + "_moves"
+			dict[piece_code] +=1/len(gameDict['white_moves'])
 	return dict
 
 ### pins function
@@ -1720,7 +1722,7 @@ def forks(gameDict):
 					if gives_fork(piece, gameDict["board_states_FEN"][i]):
 						fork_counter += 1
 					
-	return fork_counter
+	return {'fork_counter' : fork_counter}
 
 
 ### pieces_guarded
@@ -1760,7 +1762,7 @@ def pieces_guarded(gameDict):
 		p_a = np.array(pieces_attacked)		
 		p_g = np.array(pieces_guarding)
 		p_w = np.array(pieces_white)
-	return np.mean(p_a/(p_g * p_w)) / (gameDict["end_game_index"] - gameDict["middle_game_index"])
+	return {'pieces_guarded' :np.mean(p_a/(p_g * p_w)) / (gameDict["end_game_index"] - gameDict["middle_game_index"])}
 
 ### trades
 ### input: game dictionary
@@ -1874,7 +1876,7 @@ def exchanges_possible(gameDict):
 					if board.piece_at(attacks) and  board.piece_at(attacks).color == chess.BLACK and PIECE_VALUES[board.piece_at(attacks).symbol().upper()] == PIECE_VALUES[board.piece_at(chess.square(piece[0], piece[1])).symbol().upper()]:
 						exchange_counter += 1
 
-	return exchange_counter / move_counter
+	return {'exchanges_possible' :exchange_counter / move_counter}
 
 ### king_squares_attacked
 ### input: gameDict
@@ -1893,7 +1895,7 @@ def king_squares_attacked(gameDict):
 		for square in board.attacks(king):
 			if board.is_attacked_by(chess.BLACK, square): squares_attacked +=1
 
-	return squares_attacked / (gameDict['end_game_index'] - gameDict['middle_game_index'])
+	return {'king_squares_attacked' :squares_attacked / (gameDict['end_game_index'] - gameDict['middle_game_index'])}
 
 ### king_safety
 ### input: gameDict
@@ -1932,4 +1934,28 @@ def king_safety(gameDict):
 	return {'king_moves': king_moves, 'king_moves_weighted' : king_moves_weighted, 'distance_from_king' : distance_from_king_sum / gameDict['end_game_index']}
 				
 		
-	
+### get_url
+### input: gameDict
+### output: game_id
+
+def get_game_id(gameDict):
+	return {'game_id' : gameDict['game_id']}	
+
+### get_white
+### input: gameDict
+### output: white_player
+
+def get_white(gameDict):
+	return {'white_player': gameDict['white_player']}
+
+
+#######################################################################################
+##### Processing Game Features
+######################################################################################
+
+### get_features
+### input: gameDict
+### output: dictionary of all feature dictionaries
+
+def get_features(game):
+	return {**knight_features(game), **bishop_features(game), **minor_features(game), **rook_features(game), **queen_features(game), **white_development(game), **white_castling(game), **white_pawns(game), **white_board(game), **white_clusters(game), **discovered_checks(game), **distribution_piece_moves(game), **pins(game), **forks(game), **pieces_guarded(game), **trades(game), **exchanges_possible(game), **king_squares_attacked(game), **king_safety(game), **get_game_id(game), **get_white(game)}
