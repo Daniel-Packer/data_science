@@ -1695,14 +1695,13 @@ def pins(gameDict):
 			for pieces in gameDict["white_pieces"][i].values():
 				if len(pieces) == 0:break
 				for piece in pieces:	
-					
 					if is_pinned(piece, gameDict["board_states_FEN"][i]):
 						if str(piece) in current_pins:
 							current_pins[str(piece)] +=1
 						else: current_pins[str(piece)] =1
 
 	#pops of all elements at the end
-	for key in current_pins.keys():
+	for key in current_pins.copy().keys():
 		total_pins.append(current_pins.pop(key))
 	return {"pins_given":pins_given, "time_pinned":	total_pins}
 
@@ -1762,7 +1761,7 @@ def pieces_guarded(gameDict):
 		p_a = np.array(pieces_attacked)		
 		p_g = np.array(pieces_guarding)
 		p_w = np.array(pieces_white)
-	return {'pieces_guarded' :np.mean(p_a/(p_g * p_w)) / (gameDict["end_game_index"] - gameDict["middle_game_index"])}
+	return {'pieces_guarded' :np.mean(p_a/(p_g * p_w)) / min(1, (gameDict["end_game_index"] - gameDict["middle_game_index"]))}
 
 ### trades
 ### input: game dictionary
