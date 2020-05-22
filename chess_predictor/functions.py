@@ -1962,7 +1962,7 @@ def king_safety(gameDict):
 		
 		distance_from_king_sum += distance_from_king_sum_move / black_pieces
 
-	return {'king_moves': king_moves, 'king_moves_weighted' : king_moves_weighted, 'distance_from_king' : distance_from_king_sum / max(1,gameDict['end_game_index'])}
+	return {'king_moves': king_moves, 'king_moves_weighted' : king_moves_weighted, 'distance_from_king' : distance_from_king_sum / max(1,end_game)}
 				
 		
 ### get_url
