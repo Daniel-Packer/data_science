@@ -401,6 +401,24 @@ def is_pinned(p_sq, board_state_FEN):
 
 	return is_pinned_flag
 
+	
+### material(gameDict, move_number, chess.COLOR)
+### input: gameDict, (half) move_number, boolean 1 for white material, 0 for black
+### ouput: sum of piece values of color on that turn
+
+def material(gameDict, move_number, color):
+	if move_number >= len(gameDict['board_states']): raise Exception('move_number out of index')
+
+	if color : color_name = 'white_pieces'
+	else: color_name = 'black_pieces'
+
+	material_sum = 0
+
+	for piece in ['P', 'B', 'N', 'R', 'Q']:
+		material_sum += PIECE_VALUES[piece] * len(gameDict[color_name][move_number][piece])
+
+	return material_sum
+	
 
 ### gives_fork 
 ### 
@@ -1858,3 +1876,42 @@ def king_squares_attacked(gameDict):
 			if board.is_attacked_by(chess.BLACK, square): squares_attacked +=1
 
 	return squares_attacked / (gameDict['end_game_index'] - gameDict['middle_game_index'])
+
+### king_safety
+### input: gameDict
+### output: 'king_moves' : counts number of king moves before end game (note: does not count castles) 'king_moves_weighted' : number of king moves times number of black pieces on the board when the move was made, 'distance_from_king' : for a turn calculates the number of king moves away each of black's pieces are from the king divided by the rank of the piece and the sum divided by the number divided by the number of pieces of black's on the board, returns average of this per move before the end game
+
+def king_safety(gameDict):
+	# gets the indexes (in 'white_moves') of the king moves
+	move_index = []
+	for i in range(min(gameDict['end_game_index'],len(gameDict['white_moves']))):
+		if gameDict['white_moves'][i]['piece'] == 'K': move_index.append(2*i-1)
+
+	# iterates through the board states and calculates distance_from_king metric when reaches a move that is a white king move, also calculates king_moves and kings_moves_weighted
+	king_moves = 0
+	king_moves_weighted = 0
+	distance_from_king_sum = 0
+	for i in range(gameDict['end_game_index']):
+
+		# checks if a king moves and increments the counters
+		if i in move_index:
+			king_moves +=1
+			#calculates material of black			
+			king_moves_weighted += material(gameDict, i, chess.BLACK)
+
+		# calculates king square
+		king = gameDict['white_pieces'][i]['K'][0]
+		distance_from_king_sum_move = 0 
+		black_pieces = 1
+
+		for piece in ['P', 'N', 'B', 'R', 'Q']:
+			for piece_instance in gameDict['black_pieces'][i][piece]:
+				distance_from_king_sum_move += max(abs(king[0] - piece_instance[0]), abs( king[1] - piece_instance[1])) / PIECE_VALUES[piece]
+				black_pieces += 1
+		
+		distance_from_king_sum += distance_from_king_sum_move / black_pieces
+
+	return {'king_moves': king_moves, 'king_moves_weighted' : king_moves_weighted, 'distance_from_king' : distance_from_king_sum / gameDict['end_game_index']}
+				
+		
+	
