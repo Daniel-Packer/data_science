@@ -1734,8 +1734,14 @@ def pieces_guarded(gameDict):
 	pieces_guarding = []
 	pieces_white = []
 
+	if gameDict["middle_game_index"] : mid_game = gameDict["middle_game_index"]
+	else: mid_game = len(gameDict['board_states']) -1
+
+	if gameDict["end_game_index"] : end_game = gameDict["end_game_index"]
+	else: end_game = len(gameDict['board_states']) -1
+
 	# loops through moves in the midgame
-	for i in range(gameDict["middle_game_index"], gameDict["end_game_index"]):
+	for i in range(mid_game, end_game):
 		# counter for number of white pieces
 		white_pieces_turn = 0
 		# finds all white pieces attacked by black and puts them in a list
@@ -1761,7 +1767,7 @@ def pieces_guarded(gameDict):
 		p_a = np.array(pieces_attacked)		
 		p_g = np.array(pieces_guarding)
 		p_w = np.array(pieces_white)
-	return {'pieces_guarded' :np.mean(p_a/(p_g * p_w)) / min(1, (gameDict["end_game_index"] - gameDict["middle_game_index"]))}
+	return {'pieces_guarded' :np.mean(p_a/(p_g * p_w)) / max(1, (end_game - mid_game))}
 
 ### trades
 ### input: game dictionary
@@ -1771,9 +1777,16 @@ def pieces_guarded(gameDict):
 def trades(gameDict):
 	trades_list = []
 	trade_moves = []
+
+	if gameDict["middle_game_index"] : mid_game = gameDict["middle_game_index"]
+	else: mid_game = len(gameDict['board_states']) -1
+
+	if gameDict["end_game_index"] : end_game = gameDict["end_game_index"]
+	else: end_game = len(gameDict['board_states']) -1
+
 	
 	#looks first for direct trades
-	for i in range(min(len(gameDict['black_moves']), gameDict['end_game_index'])//2 +1):
+	for i in range(min(len(gameDict['black_moves']), end_game //2 + 1):
 
 		#checks if there is a white capture and that the move has not already been added to a trade
 		if gameDict['white_moves'][i]['capture'] != '' and 2*i not in trade_moves:
@@ -1822,7 +1835,7 @@ def trades(gameDict):
 						break
 
 
-	for i in range(min(gameDict['end_game_index'],len(gameDict['black_moves'])//2 + 1)):
+	for i in range(min(end_game,len(gameDict['black_moves'])//2 + 1)):
 		# checks if there is a white capture that is not yet part of a trade
 		if gameDict['white_moves'][i]['capture'] != '' and 2* i not in trade_moves and 2* i + 1 not in trade_moves:
 				piece_value = PIECE_VALUES[gameDict['white_moves'][i]['capture']]
@@ -1864,9 +1877,16 @@ def trades(gameDict):
 ### output: average number of exchanges for white per move in the middle game
 
 def exchanges_possible(gameDict):
+	if gameDict["middle_game_index"] : mid_game = gameDict["middle_game_index"]
+	else: mid_game = len(gameDict['board_states']) -1
+
+	if gameDict["end_game_index"] : end_game = gameDict["end_game_index"]
+	else: end_game = len(gameDict['board_states']) -1
+
+
 	exchange_counter = 0
 	move_counter = 0
-	for i in range(1, gameDict['end_game_index'], 2):
+	for i in range(1, end_game, 2):
 		board = chess.Board(gameDict['board_states_FEN'][i])
 		move_counter += 1
 		for pieces in gameDict['white_pieces'][i].values():
@@ -1882,9 +1902,16 @@ def exchanges_possible(gameDict):
 ### output: average number of squares adjacent to king attacked in the midgame
 
 def king_squares_attacked(gameDict):
+	if gameDict["middle_game_index"] : mid_game = gameDict["middle_game_index"]
+	else: mid_game = len(gameDict['board_states']) -1
+
+	if gameDict["end_game_index"] : end_game = gameDict["end_game_index"]
+	else: end_game = len(gameDict['board_states']) -1
+
+
 	squares_attacked = 0
 	
-	for i in range(gameDict['middle_game_index'], gameDict['end_game_index']):
+	for i in range(mid_game, end_game):
 		board = chess.Board(gameDict['board_states_FEN'][i])
 		
 		#finds white king
@@ -1894,23 +1921,28 @@ def king_squares_attacked(gameDict):
 		for square in board.attacks(king):
 			if board.is_attacked_by(chess.BLACK, square): squares_attacked +=1
 
-	return {'king_squares_attacked' :squares_attacked / (gameDict['end_game_index'] - gameDict['middle_game_index'])}
+	return {'king_squares_attacked' :squares_attacked / max(1, (end_game - mid_game))}
 
 ### king_safety
 ### input: gameDict
 ### output: 'king_moves' : counts number of king moves before end game (note: does not count castles) 'king_moves_weighted' : number of king moves times number of black pieces on the board when the move was made, 'distance_from_king' : for a turn calculates the number of king moves away each of black's pieces are from the king divided by the rank of the piece and the sum divided by the number divided by the number of pieces of black's on the board, returns average of this per move before the end game
 
 def king_safety(gameDict):
+	if gameDict["middle_game_index"] : mid_game = gameDict["middle_game_index"]
+	else: mid_game = len(gameDict['board_states']) -1
+
+	if gameDict["end_game_index"] : end_game = gameDict["end_game_index"]
+	else: end_game = len(gameDict['board_states']) -1
 	# gets the indexes (in 'white_moves') of the king moves
 	move_index = []
-	for i in range(min(gameDict['end_game_index'],len(gameDict['white_moves']))):
+	for i in range(min(end_game,len(gameDict['white_moves']))):
 		if gameDict['white_moves'][i]['piece'] == 'K': move_index.append(2*i-1)
 
 	# iterates through the board states and calculates distance_from_king metric when reaches a move that is a white king move, also calculates king_moves and kings_moves_weighted
 	king_moves = 0
 	king_moves_weighted = 0
 	distance_from_king_sum = 0
-	for i in range(gameDict['end_game_index']):
+	for i in range(end_game):
 
 		# checks if a king moves and increments the counters
 		if i in move_index:
@@ -1930,7 +1962,7 @@ def king_safety(gameDict):
 		
 		distance_from_king_sum += distance_from_king_sum_move / black_pieces
 
-	return {'king_moves': king_moves, 'king_moves_weighted' : king_moves_weighted, 'distance_from_king' : distance_from_king_sum / gameDict['end_game_index']}
+	return {'king_moves': king_moves, 'king_moves_weighted' : king_moves_weighted, 'distance_from_king' : distance_from_king_sum / max(1,gameDict['end_game_index'])}
 				
 		
 ### get_url
