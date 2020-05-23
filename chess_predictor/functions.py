@@ -1731,6 +1731,7 @@ def pieces_guarded(gameDict):
 	pieces_attacked = []
 	pieces_guarding = []
 	pieces_white = []
+	mean = 0
 
 	if gameDict["middle_game_index"] : mid_game = gameDict["middle_game_index"]
 	else: mid_game = len(gameDict['board_states']) -1
@@ -1771,7 +1772,7 @@ def pieces_guarded(gameDict):
 			cum_sum += p_a[i] / max(1, p_g[i] * p_w[i])	
 
 		mean = cum_sum / max(1, len(p_a))
-	return {'pieces_guarded' :mean / max(1, (end_game - mid_game))}
+	return {'pieces_guarded' : mean / max(1, (end_game - mid_game))}
 
 ### trades
 ### input: game dictionary
