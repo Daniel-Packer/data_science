@@ -1155,10 +1155,6 @@ def white_pawns(game_dict):
     mid_midgame_index = cap_index(mid_midgame_index, game_dict)
     endgame_index = cap_index(endgame_index, game_dict)
     
-    # In case there was no midgame, pretend there was a midgame of length 1
-    if endgame_index == midgame_index:
-        endgame_index = midgame_index + 1
-    
     ## First calculate the stats that aren't averaged over the midgame
     
     ## King protection
@@ -1198,7 +1194,12 @@ def white_pawns(game_dict):
         color = 0
     else:
         color = (color * 2) - 1
-        
+    
+    # In case there was no midgame, pretend there was a midgame of length 1
+    # Doing this now instead of at the start to avoid the indexing arrow in the "color =" line
+    if endgame_index == midgame_index:
+        endgame_index = midgame_index + 1
+    
     ## En passant
     # We have indices for board states, so the indices for white's moves will be (roughly) the same but divided by 2
     # Almost issue: if midgame_index is the last index of board_states and is odd,
