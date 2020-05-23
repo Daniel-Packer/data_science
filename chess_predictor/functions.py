@@ -1697,11 +1697,15 @@ def pins(gameDict):
 						if str(piece) in current_pins:
 							current_pins[str(piece)] +=1
 						else: current_pins[str(piece)] =1
+	if len(total_pins):
+		pin_avg = np.mean(total_pins)
+
+	else: pin_avg = 0
 
 	#pops of all elements at the end
 	for key in current_pins.copy().keys():
 		total_pins.append(current_pins.pop(key))
-	return {"pins_given":pins_given, "time_pinned":	total_pins}
+	return {"pins_given":pins_given, "time_pinned":	pin_avg}
 
 
 ### forks
