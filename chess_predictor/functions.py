@@ -1996,4 +1996,4 @@ def get_white(gameDict):
 ### output: dictionary of all feature dictionaries
 
 def get_features(game):
-	return {**knight_features(game), **bishop_features(game), **minor_features(game), **rook_features(game), **queen_features(game), **white_development(game), **white_castling(game), **white_pawns(game), **white_board(game), **white_clusters(game), **discovered_checks(game), **distribution_piece_moves(game), **pins(game), **forks(game), **pieces_guarded(game), **trades(game), **exchanges_possible(game), **king_squares_attacked(game), **king_safety(game), **get_game_id(game), **get_white(game)}
+	return {**get_game_id(game), **get_white(game), **knight_features(game), **bishop_features(game), **minor_features(game), **rook_features(game), **queen_features(game), **white_development(game), **white_castling(game), **white_pawns(game), **white_board(game), **white_clusters(game), **discovered_checks(game), **distribution_piece_moves(game), **pins(game), **forks(game), **pieces_guarded(game), **trades(game), **exchanges_possible(game), **king_squares_attacked(game), **king_safety(game)}
