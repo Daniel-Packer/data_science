@@ -1028,8 +1028,8 @@ def queen_features(game_dict):
 
     return return_dict
 ### White development
-### Outputs a list [A,B,C,D,A#,B#,C#,D#,E#,side] where
-### A,B,C,D : one-hots for ECO codes (omit E)
+### Outputs a list [A,B,C,D,E,A#,B#,C#,D#,E#,side] where
+### A,B,C,D,E : one-hots for ECO codes (include E for now, can simplify stratifying by opening later)
 ### A#,B#,C#,D#,E# : interaction terms, the one-hot times the number of the opening
 ### side : Float in [-1,1] i.e. Queen to King for white's preferred side to develop onto
 ###       Measures this by finding the center of mass of certain squares at the mid early game
@@ -1050,7 +1050,7 @@ def white_development(game_dict):
         output[i+5] = output[i] * number
     
     # Remove the one-hot for E
-    output = np.delete(output,4)
+    #output = np.delete(output,4)
     
     # Index of halfway through the early game
     index = mid_earlygame(game_dict)
