@@ -1067,8 +1067,8 @@ def white_development(game_dict):
                 weight = weight + i
     output[-1] = (weight / pieces_moved) / 3.5 - 1
     
-    return {'A': output[0],'B': output[1],'C': output[2],'D': output[3],
-            'A#': output[4],'B#': output[5],'C#': output[6],'D#': output[7],'E#': output[8],'w_development_side': output[9]}
+    return {'A': output[0],'B': output[1],'C': output[2],'D': output[3], 'E': output[4],
+            'A#': output[5],'B#': output[6],'C#': output[7],'D#': output[8],'E#': output[9],'w_development_side': output[10]}
 
 ### White castling
 ### Outputs a list [earliness, side, side_relative, artificial, development] where
