@@ -15,6 +15,9 @@ import lichess.api
 ## Need this to save the test data
 import json
 
+## For error handling
+import sys
+
 ########################################
 ### Gobal Variables
 ########################################
@@ -86,137 +89,142 @@ def get_gameDict(gamepgn):
 	#creates the game dictionary
 	gameDict = {'white_moves' : [], 'black_moves' :[], 'board_states' :[], 'board_states_FEN' :[], 'white_pieces': [], 'black_pieces': [],'middle_game_index' : None, 'end_game_index' : None }
 
-	# reads in url
-	url_start = gamepgn.find('Site') +6
-	url_end = gamepgn.find('"', url_start)
-	gameDict['game_id'] = gamepgn[url_start: url_end]
+	try:
+		# reads in url
+		url_start = gamepgn.find('Site') +6
+		url_end = gamepgn.find('"', url_start)
+		gameDict['game_id'] = gamepgn[url_start: url_end]
 
-	#reads in white_player
-	name_start = gamepgn.find('White "') +7
-	name_end = gamepgn.find('"', name_start)
-	gameDict["white_player"] = gamepgn[name_start :name_end]
-	
-	#reads in black_player
-	name_start = gamepgn.find('Black "') +7
-	name_end = gamepgn.find('"', name_start)
-	gameDict["black_player"] = gamepgn[name_start :name_end]
-
-	#reads in opening
-	name_start = gamepgn.find('ECO') + 5
-	name_end = gamepgn.find('"', name_start)
-	gameDict["opening"] = gamepgn[name_start:name_end]
-	
-	#reads in time_control
-	name_start = gamepgn.find('TimeControl') +13
-	name_end = gamepgn.find('"', name_start)
-	gameDict["time_control"] = gamepgn[name_start:name_end]
-
-	### The following iterates strips the pgn to the moves only then iterates through
-	### the moves and creates board states and move dictionary
-	# strips pgn to moves
-	end_header = gamepgn.rfind("]")
-	move_begin = gamepgn.find('1.', end_header)
-	moves  = gamepgn[move_begin:]
-	move_list = moves.split()
-	for move in move_list:
-		 if move[0].isdigit(): move_list.remove(move)
-
-	# runs through each move and creates the move dictionary and board states
-	# creates a counter for half moves
-	move_counter = 0
-
-	# creates the FEN for the opening board and creates a chess board object for that
-	# state
-	current_board = chess.Board(chess.STARTING_FEN)
-	
-	#writes the first FEN
-	#gameDict["board_states_FEN"].append(current_board.fen())
-
-	for move in move_list:
-		move_dict = {"move_number": move_counter, "capture" : '', "check" : '', "special": ''}
-		#checks what piece was moved
-		if move[0].isupper():
-			move_dict["piece"] = move[0]
-		else:
-			move_dict["piece"] = "P"
-
-		#parses the next move
-		current_move = current_board.parse_san(move)
-
-		#writes the to and from squares
-		move_dict["to"] = [current_move.to_square % 8, current_move.to_square // 8]
-		move_dict["from"] = [current_move.from_square % 8 , current_move.from_square // 8]
-		#checks if there was en passant
-		if current_board.is_en_passant(current_move):
-			move_dict["special"] = "p"
-			move_dict["capture"] = "P"
-		#if not checks if capture and of what kind
-		elif current_board.is_capture(current_move):	
-			captured_piece = current_board.remove_piece_at(current_move.to_square)
-			current_board.set_piece_at(current_move.to_square, captured_piece)
-			move_dict["capture"] = captured_piece.symbol().upper()		
-
-		#checks if promotion and writes it
-		if move.find("=") != -1:
-			move_dict["special"] = move[move.find("=") + 1]
-
-		#checks if castle and wrtes it
-		if move.find("-") != -1:
-			move_dict["special"] = move 
+		#reads in white_player
+		name_start = gamepgn.find('White "') +7
+		name_end = gamepgn.find('"', name_start)
+		gameDict["white_player"] = gamepgn[name_start :name_end]
 		
-	
-		#writes the move dict to game dict
-		if move_counter % 2:
-			gameDict["black_moves"].append(move_dict)
-		else: 
-			gameDict["white_moves"].append(move_dict) 
+		#reads in black_player
+		name_start = gamepgn.find('Black "') +7
+		name_end = gamepgn.find('"', name_start)
+		gameDict["black_player"] = gamepgn[name_start :name_end]
 
-		#pushes the move and writes the new FEN
-		current_board.push(current_move)
-		gameDict["board_states_FEN"].append(current_board.fen())
-
-		#writes the array state
-		board_copy = current_board.copy()
-		board_state =  [['' for i in range(0,8)] for j in range(0,8)]
-		for rank in range(0,8):
-			for column in range(0,8):
-				piece = board_copy.remove_piece_at(chess.SQUARES[8*rank + column ])
-				if piece: board_state[column][rank] = piece.symbol()
-
-		gameDict['board_states'].append(board_state)
-        
-		white_pieces, black_pieces = get_piece_locations(board_state)
-		gameDict['white_pieces'].append(white_pieces)
-		gameDict['black_pieces'].append(black_pieces)
-
-		#checks if midgame 
-		#counts numbers of minor/major pieces
-		major_minor_piece_count = len(gameDict['white_pieces'][move_counter]['N']) +len(gameDict['white_pieces'][move_counter]['B'])+len(gameDict['white_pieces'][move_counter]['R'])+len(gameDict['white_pieces'][move_counter]['Q']) +len(gameDict['black_pieces'][move_counter]['N'])+ len(gameDict['black_pieces'][move_counter]['R']) + len(gameDict['black_pieces'][move_counter]['B']) + len(gameDict['black_pieces'][move_counter]['Q'])
-		if not gameDict['middle_game_index']:
-			#gets the number of pieces on the back ranks
-			back_rank_pieces_white = 0
-			back_rank_pieces_black = 0
-			for pieces_list in [gameDict['white_pieces'][move_counter]['N'],	gameDict['white_pieces'][move_counter]['B'], gameDict['white_pieces'][move_counter]['R'], gameDict['white_pieces'][move_counter]['Q']]: 
-				for piece in pieces_list:
-					if piece[1] == 0: back_rank_pieces_white += 1
-			for pieces_list in [gameDict['black_pieces'][move_counter]['N'],	gameDict['black_pieces'][move_counter]['B'], gameDict['black_pieces'][move_counter]['R'], gameDict['black_pieces'][move_counter]['Q']]: 
-				for piece in pieces_list:
-					if  piece[1] == 7: back_rank_pieces_black += 1
-
-
-			#set the counter if major_minor_piece_count <= 10 or back_rank_pieces <= 3 for each of black and white
-			if (major_minor_piece_count <= 10) or (back_rank_pieces_white <= 3 and back_rank_pieces_black <= 3): 
-				gameDict['middle_game_index'] = move_counter
+		#reads in opening
+		name_start = gamepgn.find('ECO') + 5
+		name_end = gamepgn.find('"', name_start)
+		gameDict["opening"] = gamepgn[name_start:name_end]
 		
-		#checks if endgame
-		if not (gameDict['end_game_index'])  and major_minor_piece_count <= 6:
-			gameDict['end_game_index'] = move_counter
+		#reads in time_control
+		name_start = gamepgn.find('TimeControl') +13
+		name_end = gamepgn.find('"', name_start)
+		gameDict["time_control"] = gamepgn[name_start:name_end]
+
+		### The following iterates strips the pgn to the moves only then iterates through
+		### the moves and creates board states and move dictionary
+		# strips pgn to moves
+		end_header = gamepgn.rfind("]")
+		move_begin = gamepgn.find('1.', end_header)
+		moves  = gamepgn[move_begin:]
+		move_list = moves.split()
+		for move in move_list:
+			 if move[0].isdigit(): move_list.remove(move)
+
+		# runs through each move and creates the move dictionary and board states
+		# creates a counter for half moves
+		move_counter = 0
+
+		# creates the FEN for the opening board and creates a chess board object for that
+		# state
+		current_board = chess.Board(chess.STARTING_FEN)
+		
+		#writes the first FEN
+		#gameDict["board_states_FEN"].append(current_board.fen())
+
+		for move in move_list:
+			move_dict = {"move_number": move_counter, "capture" : '', "check" : '', "special": ''}
+			#checks what piece was moved
+			if move[0].isupper():
+				move_dict["piece"] = move[0]
+			else:
+				move_dict["piece"] = "P"
+
+			#parses the next move
+			current_move = current_board.parse_san(move)
+
+			#writes the to and from squares
+			move_dict["to"] = [current_move.to_square % 8, current_move.to_square // 8]
+			move_dict["from"] = [current_move.from_square % 8 , current_move.from_square // 8]
+			#checks if there was en passant
+			if current_board.is_en_passant(current_move):
+				move_dict["special"] = "p"
+				move_dict["capture"] = "P"
+			#if not checks if capture and of what kind
+			elif current_board.is_capture(current_move):	
+				captured_piece = current_board.remove_piece_at(current_move.to_square)
+				current_board.set_piece_at(current_move.to_square, captured_piece)
+				move_dict["capture"] = captured_piece.symbol().upper()		
+
+			#checks if promotion and writes it
+			if move.find("=") != -1:
+				move_dict["special"] = move[move.find("=") + 1]
+
+			#checks if castle and wrtes it
+			if move.find("-") != -1:
+				move_dict["special"] = move 
+			
+		
+			#writes the move dict to game dict
+			if move_counter % 2:
+				gameDict["black_moves"].append(move_dict)
+			else: 
+				gameDict["white_moves"].append(move_dict) 
+
+			#pushes the move and writes the new FEN
+			current_board.push(current_move)
+			gameDict["board_states_FEN"].append(current_board.fen())
+
+			#writes the array state
+			board_copy = current_board.copy()
+			board_state =  [['' for i in range(0,8)] for j in range(0,8)]
+			for rank in range(0,8):
+				for column in range(0,8):
+					piece = board_copy.remove_piece_at(chess.SQUARES[8*rank + column ])
+					if piece: board_state[column][rank] = piece.symbol()
+
+			gameDict['board_states'].append(board_state)
         
-		#check is mate or checkmate
-		if current_board.is_check(): move_dict["check"] = "+"
-		elif current_board.is_checkmate(): move_dict["check"] = "#"
-				
-		move_counter += 1
+			white_pieces, black_pieces = get_piece_locations(board_state)
+			gameDict['white_pieces'].append(white_pieces)
+			gameDict['black_pieces'].append(black_pieces)
+
+			#checks if midgame 
+			#counts numbers of minor/major pieces
+			major_minor_piece_count = len(gameDict['white_pieces'][move_counter]['N']) +len(gameDict['white_pieces'][move_counter]['B'])+len(gameDict['white_pieces'][move_counter]['R'])+len(gameDict['white_pieces'][move_counter]['Q']) +len(gameDict['black_pieces'][move_counter]['N'])+ len(gameDict['black_pieces'][move_counter]['R']) + len(gameDict['black_pieces'][move_counter]['B']) + len(gameDict['black_pieces'][move_counter]['Q'])
+			if not gameDict['middle_game_index']:
+				#gets the number of pieces on the back ranks
+				back_rank_pieces_white = 0
+				back_rank_pieces_black = 0
+				for pieces_list in [gameDict['white_pieces'][move_counter]['N'],	gameDict['white_pieces'][move_counter]['B'], gameDict['white_pieces'][move_counter]['R'], gameDict['white_pieces'][move_counter]['Q']]: 
+					for piece in pieces_list:
+						if piece[1] == 0: back_rank_pieces_white += 1
+				for pieces_list in [gameDict['black_pieces'][move_counter]['N'],	gameDict['black_pieces'][move_counter]['B'], gameDict['black_pieces'][move_counter]['R'], gameDict['black_pieces'][move_counter]['Q']]: 
+					for piece in pieces_list:
+						if  piece[1] == 7: back_rank_pieces_black += 1
+
+
+				#set the counter if major_minor_piece_count <= 10 or back_rank_pieces <= 3 for each of black and white
+				if (major_minor_piece_count <= 10) or (back_rank_pieces_white <= 3 and back_rank_pieces_black <= 3): 
+					gameDict['middle_game_index'] = move_counter
+			
+			#checks if endgame
+			if not (gameDict['end_game_index'])  and major_minor_piece_count <= 6:
+				gameDict['end_game_index'] = move_counter
+        
+			#check is mate or checkmate
+			if current_board.is_check(): move_dict["check"] = "+"
+			elif current_board.is_checkmate(): move_dict["check"] = "#"
+					
+			move_counter += 1
+
+	except:
+		# If something went wrong, return the empty game
+		gameDict = {'white_moves' : [], 'black_moves' :[], 'board_states' :[], 'board_states_FEN' :[], 'white_pieces': [], 'black_pieces': [],'middle_game_index' : None, 'end_game_index' : None }
 
 	return gameDict  
 
